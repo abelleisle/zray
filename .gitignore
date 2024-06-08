@@ -1,0 +1,11 @@
+# Zig generated binaries
+zig-out/
+
+# Pre zig v0.13
+zig-cache/
+# Post zig v0.13
+.zig-cache/
+
+# Development Cache Files
+.direnv
+Session.vim
