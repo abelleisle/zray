@@ -36,7 +36,7 @@ pub fn vec3(comptime T: type) type {
 
         pub inline fn divide(self: Vec, scalar: T) Vec {
             if (scalar == 0) {
-                @panic("Cannot divide by zero!!");
+                math.raiseDivByZero();
             }
             return Vec.init(self.x / scalar, self.y / scalar, self.z / scalar);
         }
@@ -59,6 +59,13 @@ pub fn vec3(comptime T: type) type {
 
         pub inline fn cross(lhs: Vec, rhs: Vec) Vec {
             return Vec.init(lhs.y * rhs.z - lhs.z * rhs.y, lhs.z * rhs.x - lhs.x * rhs.z, lhs.x * rhs.y - lhs.y * rhs.x);
+        }
+
+        pub fn format(self: Vec, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
+            _ = fmt;
+            _ = options;
+
+            try writer.print("({d}, {d}, {d})", .{ self.x, self.y, self.z });
         }
     };
 }
