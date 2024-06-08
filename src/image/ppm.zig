@@ -32,7 +32,16 @@ pub fn deinit(self: *Self) void {
 }
 
 /// Renders image to string
-pub fn render(self: Self) !String {
+pub fn render(self: Self, progress: ?std.Progress.Node) !String {
+    const fileProg = if (progress) |p|
+        p.start("PPM File Render", self.height * self.width)
+    else
+        null;
+
+    defer if (fileProg) |f| {
+        f.end();
+    };
+
     var str = String.init(self.allocator);
     var tmp = String.init(self.allocator);
     defer tmp.deinit();
@@ -48,6 +57,9 @@ pub fn render(self: Self) !String {
             const b = self.data[index + 2];
             try tmp.fmt("{d} {d} {d} ", .{ r, g, b });
             try str.append(tmp.str());
+            if (fileProg) |f| {
+                f.completeOne();
+            }
         }
         try str.append("\n");
     }

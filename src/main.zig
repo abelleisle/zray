@@ -20,7 +20,7 @@ const Sphere = @import("shapes.zig").Sphere;
 const imageAspectRatio: fsize = 16.0 / 9.0;
 
 // Image dimensions
-const imageWidth: usize = 400;
+const imageWidth: usize = 2560;
 const imageHeight: usize = @intFromFloat(imageHeightF);
 const imageWidthF: fsize = @floatFromInt(imageWidth);
 const imageHeightF: fsize = imageWidthF / imageAspectRatio;
@@ -68,6 +68,11 @@ pub fn skyColor(ray: Ray) Vec3f {
 }
 
 pub fn main() !void {
+    std.debug.print("ID: {d}, {d}\n", .{ imageWidth, imageHeight });
+    std.debug.print("VP: {d}, {d}\n", .{ viewportWidth, viewportHeight });
+    std.debug.print("Focal Length: {d}\n", .{focalLength});
+    std.debug.print("Camera Center: {}\n", .{cameraLocation});
+
     var arenaAlloc = std.heap.ArenaAllocator.init(std.heap.page_allocator);
     defer arenaAlloc.deinit();
 
@@ -76,7 +81,10 @@ pub fn main() !void {
     var ppm = try PPM.init(alloc, imageWidth, imageHeight);
     defer ppm.deinit();
 
-    // try ppm.fillDemo();
+    const parentProgNode = std.Progress.start(.{});
+    defer parentProgNode.end();
+
+    const pixelProgNode = parentProgNode.start("Rendering Pixels", imageWidth * imageHeight);
     for (0..imageHeight) |Y| {
         const y: fsize = @floatFromInt(Y);
         for (0..imageWidth) |X| {
@@ -91,27 +99,24 @@ pub fn main() !void {
 
             const color = skyColor(ray);
             try ppm.writeVecF(X, Y, color);
+            pixelProgNode.completeOne();
         }
     }
+    pixelProgNode.end();
 
-    var file = try ppm.render();
+    var file = try ppm.render(parentProgNode);
     defer file.deinit();
 
     var fsf = try fs.createFileAbsolute("/tmp/demo.ppm", .{});
     defer fsf.close();
 
+    const fileProgNode = parentProgNode.start("File Writing", 1);
     const writtenLen = try fsf.write(file.str());
     if (writtenLen != file.len) {
         return error.WriteSize;
     }
-
-    std.debug.print("ID: {d}, {d}\n", .{ imageWidth, imageHeight });
-    std.debug.print("VP: {d}, {d}\n", .{ viewportWidth, viewportHeight });
-    std.debug.print("Focal Length: {d}\n", .{focalLength});
-    std.debug.print("Camera Center: {}\n", .{cameraLocation});
-
-    const sphere = Sphere.init(Vec3f.init(0, 0, -1), 0.5);
-    std.debug.print("Sphere: {}\n", .{sphere});
+    fileProgNode.completeOne();
+    fileProgNode.end();
 }
 
 ///////////////////////////////////////////////////
