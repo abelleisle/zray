@@ -5,6 +5,10 @@ const std = @import("std");
 const Allocator = std.mem.Allocator;
 
 const String = @import("../types.zig").String;
+const Vec3f = @import("../types.zig").Vec3f;
+const Vec3i = @import("../types.zig").Vec3i;
+const Vec3c = @import("../types.zig").Vec3c;
+const fsize = @import("../types.zig").fsize;
 
 allocator: Allocator,
 width: usize,
@@ -62,21 +66,34 @@ pub fn fillColor(self: *Self, r: u8, g: u8, b: u8) !void {
 
 /// Fill the image with the demo image
 pub fn fillDemo(self: *Self) !void {
+    const w: fsize = @floatFromInt(self.width - 1);
+    const h: fsize = @floatFromInt(self.height - 1);
     for (0..self.height) |y| {
+        const Y: fsize = @floatFromInt(y);
         for (0..self.width) |x| {
-            var r: f64 = @floatFromInt(x);
-            r /= @floatFromInt(self.width - 1);
-            var g: f64 = @floatFromInt(y);
-            g /= @floatFromInt(self.height - 1);
-            const b: f64 = 0.0;
+            const X: fsize = @floatFromInt(x);
 
-            const ir: usize = @intFromFloat(255.999 * r);
-            const ig: usize = @intFromFloat(255.999 * g);
-            const ib: usize = @intFromFloat(255.999 * b);
+            const color = Vec3f.init(X / w, Y / h, 0.0);
 
-            try self.writeTo(x, y, @truncate(ir), @truncate(ig), @truncate(ib));
+            try self.writeVecF(x, y, color);
         }
     }
+}
+
+/// Write vec with 0 - 1 precision to coordinate
+pub fn writeVecF(self: *Self, x: usize, y: usize, color: Vec3f) !void {
+    const c = convertFloatToInt(color);
+
+    try self.writeTo(x, y, c.x, c.y, c.z);
+}
+
+/// Write vec with 0 - 255 integer precision to coordinate
+pub fn writeVecC(self: *Self, x: usize, y: usize, color: Vec3c) !void {
+    const r = color.x;
+    const g = color.y;
+    const b = color.z;
+
+    try self.writeTo(x, y, r, g, b);
 }
 
 /// Write color to specified index
@@ -98,4 +115,17 @@ fn posIndex(self: Self, x: usize, y: usize) !usize {
     }
 
     return (x + (y * self.width)) * 3;
+}
+
+/// Converts 0-1 floats vectors to 0-255 u8 vectors
+fn convertFloatToInt(color: Vec3f) Vec3c {
+    const r = color.x;
+    const g = color.y;
+    const b = color.z;
+
+    const ir: usize = @intFromFloat(255.999 * r);
+    const ig: usize = @intFromFloat(255.999 * g);
+    const ib: usize = @intFromFloat(255.999 * b);
+
+    return Vec3c.init(@truncate(ir), @truncate(ig), @truncate(ib));
 }
