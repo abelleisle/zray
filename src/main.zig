@@ -10,6 +10,8 @@ const Vec3f = @import("types.zig").Vec3f;
 const Ray = @import("types.zig").Ray;
 const fsize = @import("types.zig").fsize;
 
+const Sphere = @import("shapes.zig").Sphere;
+
 /////////////////////////////////////////////////////
 //                    CONSTANTS                    //
 /////////////////////////////////////////////////////
@@ -42,14 +44,20 @@ const pixelDeltaU = viewportU.divide(imageWidthF);
 const pixelDeltaV = viewportV.divide(imageHeightF);
 
 // Find upper-left pixel
-const viewportTopLeft = cameraLocation.subVec(focalLengthVec.subVec(viewportUhalf.subVec(viewportVhalf)));
-const pixel00Loc = ((pixelDeltaU.addVec(pixelDeltaV)).multiply(0.5)).addVec(viewportTopLeft);
+const viewportTopLeft = ((cameraLocation.subVec(focalLengthVec)).subVec(viewportUhalf)).subVec(viewportVhalf);
+
+const pixel00Loc = viewportTopLeft.addVec((pixelDeltaU.addVec(pixelDeltaV)).multiply(0.5));
 
 /////////////////////////////////////////////////////
 //                    FUNCTIONS                    //
 /////////////////////////////////////////////////////
 
 pub fn skyColor(ray: Ray) Vec3f {
+    const sphere = Sphere.init(Vec3f.init(0, 0, -1), 0.5);
+    if (sphere.intersect(ray)) {
+        return Vec3f.init(1, 0, 0);
+    }
+
     const unitDirection = ray.direction.unitVec();
     const a = 0.5 * (unitDirection.y + 1.0);
 
@@ -101,6 +109,9 @@ pub fn main() !void {
     std.debug.print("VP: {d}, {d}\n", .{ viewportWidth, viewportHeight });
     std.debug.print("Focal Length: {d}\n", .{focalLength});
     std.debug.print("Camera Center: {}\n", .{cameraLocation});
+
+    const sphere = Sphere.init(Vec3f.init(0, 0, -1), 0.5);
+    std.debug.print("Sphere: {}\n", .{sphere});
 }
 
 ///////////////////////////////////////////////////
