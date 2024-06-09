@@ -118,10 +118,6 @@ fn writeTo(self: *Self, x: usize, y: usize, r: u8, g: u8, b: u8) !void {
 
 /// Convert position to index
 fn posIndex(self: Self, x: usize, y: usize) !usize {
-    if (x < 0 or y < 0) {
-        return error.BadIndexSmall;
-    }
-
     if (x >= self.width or y >= self.height) {
         return error.BadIndexLarge;
     }
