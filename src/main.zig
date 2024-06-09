@@ -1,6 +1,7 @@
 const std = @import("std");
 const math = std.math;
 const Allocator = std.mem.Allocator;
+const ArrayList = std.ArrayList;
 
 const fs = std.fs;
 
@@ -10,7 +11,11 @@ const Vec3f = @import("types.zig").Vec3f;
 const Ray = @import("types.zig").Ray;
 const fsize = @import("types.zig").fsize;
 
-const Sphere = @import("shapes.zig").Sphere;
+const shapes = @import("shapes.zig");
+const Shape = shapes.Shape;
+const Sphere = shapes.Sphere;
+
+const ShapeList = ArrayList(Shape);
 
 /////////////////////////////////////////////////////
 //                    CONSTANTS                    //
@@ -52,11 +57,12 @@ const pixel00Loc = viewportTopLeft.addVec((pixelDeltaU.addVec(pixelDeltaV)).mult
 //                    FUNCTIONS                    //
 /////////////////////////////////////////////////////
 
-pub fn rayColor(ray: Ray) Vec3f {
-    const sphere = Sphere.init(Vec3f.init(0, 0, -1), 0.5);
-    if (sphere.intersection(ray)) |t| {
-        const N = (ray.at(t).subVec(Vec3f.init(0, 0, -1))).unitVec();
-        return N.add(1.0).multiply(0.5);
+pub fn rayColor(ray: Ray, shapeList: *const ShapeList) Vec3f {
+    for (shapeList.items) |shape| {
+        if (shape.intersection(ray)) |t| {
+            const N = (ray.at(t).subVec(Vec3f.init(0, 0, -1))).unitVec();
+            return N.add(1.0).multiply(0.5);
+        }
     }
 
     const unitDirection = ray.direction.unitVec();
@@ -85,6 +91,17 @@ pub fn main() !void {
     const parentProgNode = std.Progress.start(.{});
     defer parentProgNode.end();
 
+    // Create Shapes
+    var shapeList = ShapeList.init(alloc);
+    defer shapeList.deinit();
+
+    const sp = try Sphere.init(alloc, Vec3f.init(0, 0, -1), 0.5);
+    try shapeList.append(sp.shape);
+
+    defer for (shapeList.items) |*s| {
+        s.deinit();
+    };
+
     const pixelProgNode = parentProgNode.start("Rendering Pixels", imageWidth * imageHeight);
     for (0..imageHeight) |Y| {
         const y: fsize = @floatFromInt(Y);
@@ -98,7 +115,7 @@ pub fn main() !void {
             const rayDirection = pixelCenter.subVec(cameraLocation);
             const ray = Ray.init(cameraLocation, rayDirection);
 
-            const color = rayColor(ray);
+            const color = rayColor(ray, &shapeList);
             try ppm.writeVecF(X, Y, color);
             pixelProgNode.completeOne();
         }

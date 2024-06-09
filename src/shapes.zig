@@ -1,6 +1,8 @@
 const std = @import("std");
 const math = std.math;
 
+const Allocator = std.mem.Allocator;
+
 const Ray = @import("types.zig").Ray;
 const Vec = @import("types.zig").Vec3f;
 const fsize = @import("types.zig").fsize;
@@ -9,37 +11,60 @@ const fsize = @import("types.zig").fsize;
 //                    TYPE                    //
 ////////////////////////////////////////////////
 
+pub const Shape = struct {
+    ptr: *anyopaque,
+    allocator: Allocator,
+
+    intersectionFnPtr: *const fn (ptr: *const Shape, ray: Ray) ?fsize,
+    deinitFnPtr: *const fn (ptr: *const Shape) void,
+
+    pub fn intersection(self: *const Shape, ray: Ray) ?fsize {
+        return self.intersectionFnPtr(self, ray);
+    }
+
+    pub fn deinit(self: *const Shape) void {
+        self.deinitFnPtr(self);
+    }
+};
+
 pub const Sphere = struct {
     center: Vec,
     radius: fsize,
 
-    pub fn init(center: Vec, radius: fsize) Sphere {
-        return .{ .center = center, .radius = radius };
+    shape: Shape,
+
+    pub fn init(allocator: Allocator, center: Vec, radius: fsize) !*Sphere {
+        const sphere = try allocator.create(Sphere);
+        const shape = .{ .ptr = sphere, .allocator = allocator, .intersectionFnPtr = intersection, .deinitFnPtr = deinit };
+        sphere.* = .{
+            .center = center,
+            .radius = radius,
+            .shape = shape,
+        };
+        return sphere;
     }
 
-    pub fn inside(self: Sphere, point: Vec) bool {
+    pub fn deinit(ptr: *const Shape) void {
+        const self: *const Sphere = @ptrCast(@alignCast(ptr.ptr));
+        ptr.allocator.destroy(self);
+    }
+
+    pub fn destroy(self: *Sphere, allocator: Allocator) void {
+        allocator.destroy(self);
+    }
+
+    pub fn inside(ptr: *const Shape, point: Vec) bool {
+        const self: *const Sphere = @ptrCast(@alignCast(ptr.ptr));
+
         const positionCenter = self.center.subVec(point);
         const distance = positionCenter.dot(positionCenter);
 
         return distance <= math.pow(fsize, self.radius, 2);
     }
 
-    // pub fn intersection(self: Sphere, ray: Ray) ?fsize {
-    //     const oc = self.center.subVec(ray.origin);
-    //
-    //     const a = ray.direction.dot(ray.direction);
-    //     const b = -2.0 * ray.direction.dot(oc);
-    //     const c = oc.dot(oc) - (self.radius * self.radius);
-    //
-    //     const discriminant = (b * b) - (4 * a * c);
-    //     if (discriminant < 0) {
-    //         return null;
-    //     } else {
-    //         return ((-b) - math.sqrt(discriminant)) / (2.0 * a);
-    //     }
-    // }
+    pub fn intersection(ptr: *const Shape, ray: Ray) ?fsize {
+        const self: *const Sphere = @ptrCast(@alignCast(ptr.ptr));
 
-    pub fn intersection(self: Sphere, ray: Ray) ?fsize {
         const oc = self.center.subVec(ray.origin);
 
         const a = ray.direction.lengthSq();
@@ -67,6 +92,7 @@ pub const Sphere = struct {
 ///////////////////////////////////////////////////
 
 const testing = std.testing;
+const talloc = std.testing.allocator;
 
 ////////////////////
 // Sphere
@@ -74,16 +100,18 @@ const testing = std.testing;
 test "Create Sphere" {
     const originTest = Vec.init(34, 0.003, -1);
     const radius = 5.6;
-    const sphereTest = Sphere.init(originTest, radius);
-    const expectedSphere = Sphere{ .center = Vec.init(34, 0.003, -1), .radius = 5.6 };
+    const sphereTest = try Sphere.init(talloc, originTest, radius);
+    defer sphereTest.destroy(talloc);
 
-    try testing.expectEqual(expectedSphere, sphereTest);
+    try testing.expectEqual(5.6, sphereTest.radius);
+    try testing.expectEqual(Vec.init(34, 0.003, -1), sphereTest.center);
 }
 
 test "Inside Origin" {
     const originTest = Vec.init(0, 0, 0);
     const radius = 1;
-    const sphereTest = Sphere.init(originTest, radius);
+    const sphereTest = try Sphere.init(talloc, originTest, radius);
+    defer sphereTest.destroy(talloc);
 
     const ITV = struct { expected: bool, vector: Vec };
 
@@ -104,7 +132,8 @@ test "Inside Origin" {
 test "Inside Moved" {
     const originTest = Vec.init(3.5, 2.4, 5.7);
     const radius = 0.59;
-    const sphereTest = Sphere.init(originTest, radius);
+    const sphereTest = try Sphere.init(talloc, originTest, radius);
+    defer sphereTest.destroy(talloc);
 
     const ITV = struct { expected: bool, vector: Vec };
 
