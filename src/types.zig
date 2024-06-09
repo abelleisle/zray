@@ -31,6 +31,9 @@ pub const HitRecord = struct {
     }
 };
 
+// Interval
+pub const Interval = @import("types/interval.zig").interval(fsize);
+
 ///////////////////////////////////////////////////
 //                    TESTING                    //
 ///////////////////////////////////////////////////

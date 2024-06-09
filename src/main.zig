@@ -7,9 +7,11 @@ const fs = std.fs;
 
 const PPM = @import("image/ppm.zig");
 
-const Vec3f = @import("types.zig").Vec3f;
-const Ray = @import("types.zig").Ray;
-const fsize = @import("types.zig").fsize;
+const types = @import("types.zig");
+const Vec3f = types.Vec3f;
+const Ray = types.Ray;
+const fsize = types.fsize;
+const Interval = types.Interval;
 
 const shapes = @import("shapes.zig");
 const Shape = shapes.Shape;
@@ -58,7 +60,8 @@ const pixel00Loc = viewportTopLeft.addVec((pixelDeltaU.addVec(pixelDeltaV)).mult
 /////////////////////////////////////////////////////
 
 pub fn rayColor(ray: Ray, world: *const World) Vec3f {
-    if (world.intersection(ray, 0, math.inf(fsize))) |hr| {
+    const ival = Interval.init(0, math.inf(fsize));
+    if (world.intersection(ray, ival)) |hr| {
         return (hr.normal.add(1.0)).multiply(0.5);
     }
 

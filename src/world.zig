@@ -5,10 +5,12 @@ const Allocator = std.mem.Allocator;
 const shapes = @import("shapes.zig");
 const Shape = shapes.Shape;
 
-const Ray = @import("types.zig").Ray;
-const Vec = @import("types.zig").Vec3f;
-const fsize = @import("types.zig").fsize;
-const HitRecord = @import("types.zig").HitRecord;
+const types = @import("types.zig");
+const Ray = types.Ray;
+const Vec = types.Vec3f;
+const fsize = types.fsize;
+const HitRecord = types.HitRecord;
+const Interval = types.Interval;
 
 const ShapeList = std.ArrayList(Shape);
 
@@ -43,12 +45,12 @@ pub const World = struct {
         try self.objects.append(shape);
     }
 
-    pub fn intersection(self: *const World, ray: Ray, rayTMin: fsize, rayTMax: fsize) ?HitRecord {
+    pub fn intersection(self: *const World, ray: Ray, rayT: Interval) ?HitRecord {
         var hr: ?HitRecord = null;
-        var closestT = rayTMax;
+        var closestT = rayT.max;
 
         for (self.objects.items) |*o| {
-            if (o.intersection(ray, rayTMin, closestT)) |hit| {
+            if (o.intersection(ray, Interval.init(rayT.min, closestT))) |hit| {
                 closestT = hit.time;
                 hr = hit;
             }

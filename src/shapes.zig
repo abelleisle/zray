@@ -3,10 +3,12 @@ const math = std.math;
 
 const Allocator = std.mem.Allocator;
 
-const Ray = @import("types.zig").Ray;
-const Vec = @import("types.zig").Vec3f;
-const fsize = @import("types.zig").fsize;
-const HitRecord = @import("types.zig").HitRecord;
+const types = @import("types.zig");
+const Ray = types.Ray;
+const Vec = types.Vec3f;
+const fsize = types.fsize;
+const HitRecord = types.HitRecord;
+const Interval = types.Interval;
 
 ////////////////////////////////////////////////
 //                    TYPE                    //
@@ -16,12 +18,12 @@ pub const Shape = struct {
     ptr: *anyopaque,
     allocator: Allocator,
 
-    intersectionFnPtr: *const fn (self: *const Shape, ray: Ray, rayTMin: fsize, rayTMax: fsize) ?HitRecord,
+    intersectionFnPtr: *const fn (self: *const Shape, ray: Ray, rayT: Interval) ?HitRecord,
     insideFnPtr: *const fn (self: *const Shape, point: Vec) bool,
     deinitFnPtr: *const fn (ptr: *const Shape) void,
 
-    pub fn intersection(self: *const Shape, ray: Ray, rayTMin: fsize, rayTMax: fsize) ?HitRecord {
-        return self.intersectionFnPtr(self, ray, rayTMin, rayTMax);
+    pub fn intersection(self: *const Shape, ray: Ray, rayT: Interval) ?HitRecord {
+        return self.intersectionFnPtr(self, ray, rayT);
     }
 
     pub fn inside(self: *const Shape, point: Vec) bool {
@@ -68,7 +70,7 @@ pub const Sphere = struct {
         return distance <= math.pow(fsize, self.radius, 2);
     }
 
-    pub fn intersection(ptr: *const Shape, ray: Ray, rayTMin: fsize, rayTMax: fsize) ?HitRecord {
+    pub fn intersection(ptr: *const Shape, ray: Ray, rayT: Interval) ?HitRecord {
         const self: *const Sphere = @ptrCast(@alignCast(ptr.ptr));
 
         const oc = self.center.subVec(ray.origin);
@@ -86,9 +88,9 @@ pub const Sphere = struct {
 
         // Find nearest root in specified range
         var root = (h - sqrtd) / a;
-        if (root <= rayTMin or rayTMax <= root) {
+        if (!rayT.surrounds(root)) {
             root = (h + sqrtd) / a;
-            if (root <= rayTMin or rayTMax <= root) {
+            if (!rayT.surrounds(root)) {
                 return null;
             }
         }
