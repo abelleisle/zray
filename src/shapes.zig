@@ -6,6 +6,7 @@ const Allocator = std.mem.Allocator;
 const Ray = @import("types.zig").Ray;
 const Vec = @import("types.zig").Vec3f;
 const fsize = @import("types.zig").fsize;
+const HitRecord = @import("types.zig").HitRecord;
 
 ////////////////////////////////////////////////
 //                    TYPE                    //
@@ -15,11 +16,16 @@ pub const Shape = struct {
     ptr: *anyopaque,
     allocator: Allocator,
 
-    intersectionFnPtr: *const fn (ptr: *const Shape, ray: Ray) ?fsize,
+    intersectionFnPtr: *const fn (self: *const Shape, ray: Ray, rayTMin: fsize, rayTMax: fsize) ?HitRecord,
+    insideFnPtr: *const fn (self: *const Shape, point: Vec) bool,
     deinitFnPtr: *const fn (ptr: *const Shape) void,
 
-    pub fn intersection(self: *const Shape, ray: Ray) ?fsize {
-        return self.intersectionFnPtr(self, ray);
+    pub fn intersection(self: *const Shape, ray: Ray, rayTMin: fsize, rayTMax: fsize) ?HitRecord {
+        return self.intersectionFnPtr(self, ray, rayTMin, rayTMax);
+    }
+
+    pub fn inside(self: *const Shape, point: Vec) bool {
+        return self.insideFnPtr(self, point);
     }
 
     pub fn deinit(self: *const Shape) void {
@@ -35,7 +41,7 @@ pub const Sphere = struct {
 
     pub fn init(allocator: Allocator, center: Vec, radius: fsize) !*Sphere {
         const sphere = try allocator.create(Sphere);
-        const shape = .{ .ptr = sphere, .allocator = allocator, .intersectionFnPtr = intersection, .deinitFnPtr = deinit };
+        const shape = .{ .ptr = sphere, .allocator = allocator, .intersectionFnPtr = intersection, .insideFnPtr = inside, .deinitFnPtr = deinit };
         sphere.* = .{
             .center = center,
             .radius = radius,
@@ -62,7 +68,7 @@ pub const Sphere = struct {
         return distance <= math.pow(fsize, self.radius, 2);
     }
 
-    pub fn intersection(ptr: *const Shape, ray: Ray) ?fsize {
+    pub fn intersection(ptr: *const Shape, ray: Ray, rayTMin: fsize, rayTMax: fsize) ?HitRecord {
         const self: *const Sphere = @ptrCast(@alignCast(ptr.ptr));
 
         const oc = self.center.subVec(ray.origin);
@@ -74,9 +80,23 @@ pub const Sphere = struct {
         const discriminant = (h * h) - (a * c);
         if (discriminant < 0) {
             return null;
-        } else {
-            return (h - math.sqrt(discriminant)) / a;
         }
+
+        const sqrtd = math.sqrt(discriminant);
+
+        // Find nearest root in specified range
+        var root = (h - sqrtd) / a;
+        if (root <= rayTMin or rayTMax <= root) {
+            root = (h + sqrtd) / a;
+            if (root <= rayTMin or rayTMax <= root) {
+                return null;
+            }
+        }
+
+        const time = root;
+        const pos = ray.at(time);
+        const outwardNormal = (pos.subVec(self.center)).divide(self.radius);
+        return HitRecord.init(pos, time, ray, outwardNormal);
     }
 
     pub fn format(self: Sphere, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
@@ -124,7 +144,7 @@ test "Inside Origin" {
 
     for (insideTest) |i| {
         const e = i.expected;
-        const a = sphereTest.inside(i.vector);
+        const a = sphereTest.shape.inside(i.vector);
         try testing.expectEqual(e, a);
     }
 }
@@ -147,7 +167,7 @@ test "Inside Moved" {
 
     for (insideTest) |i| {
         const e = i.expected;
-        const a = sphereTest.inside(i.vector);
+        const a = sphereTest.shape.inside(i.vector);
         try testing.expectEqual(e, a);
     }
 }

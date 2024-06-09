@@ -15,7 +15,7 @@ const shapes = @import("shapes.zig");
 const Shape = shapes.Shape;
 const Sphere = shapes.Sphere;
 
-const ShapeList = ArrayList(Shape);
+const World = @import("world.zig").World;
 
 /////////////////////////////////////////////////////
 //                    CONSTANTS                    //
@@ -57,12 +57,9 @@ const pixel00Loc = viewportTopLeft.addVec((pixelDeltaU.addVec(pixelDeltaV)).mult
 //                    FUNCTIONS                    //
 /////////////////////////////////////////////////////
 
-pub fn rayColor(ray: Ray, shapeList: *const ShapeList) Vec3f {
-    for (shapeList.items) |shape| {
-        if (shape.intersection(ray)) |t| {
-            const N = (ray.at(t).subVec(Vec3f.init(0, 0, -1))).unitVec();
-            return N.add(1.0).multiply(0.5);
-        }
+pub fn rayColor(ray: Ray, world: *const World) Vec3f {
+    if (world.intersection(ray, 0, math.inf(fsize))) |hr| {
+        return (hr.normal.add(1.0)).multiply(0.5);
     }
 
     const unitDirection = ray.direction.unitVec();
@@ -85,6 +82,9 @@ pub fn main() !void {
 
     const alloc = arenaAlloc.allocator();
 
+    var world = World.init(alloc);
+    defer world.deinit();
+
     var ppm = try PPM.init(alloc, imageWidth, imageHeight);
     defer ppm.deinit();
 
@@ -92,15 +92,11 @@ pub fn main() !void {
     defer parentProgNode.end();
 
     // Create Shapes
-    var shapeList = ShapeList.init(alloc);
-    defer shapeList.deinit();
+    var sp = try Sphere.init(alloc, Vec3f.init(0, 0, -1), 0.5);
+    try world.add(sp.shape);
 
-    const sp = try Sphere.init(alloc, Vec3f.init(0, 0, -1), 0.5);
-    try shapeList.append(sp.shape);
-
-    defer for (shapeList.items) |*s| {
-        s.deinit();
-    };
+    sp = try Sphere.init(alloc, Vec3f.init(0, -100.5, -1), 100);
+    try world.add(sp.shape);
 
     const pixelProgNode = parentProgNode.start("Rendering Pixels", imageWidth * imageHeight);
     for (0..imageHeight) |Y| {
@@ -115,7 +111,7 @@ pub fn main() !void {
             const rayDirection = pixelCenter.subVec(cameraLocation);
             const ray = Ray.init(cameraLocation, rayDirection);
 
-            const color = rayColor(ray, &shapeList);
+            const color = rayColor(ray, &world);
             try ppm.writeVecF(X, Y, color);
             pixelProgNode.completeOne();
         }
