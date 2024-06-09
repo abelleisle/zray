@@ -15,7 +15,7 @@ pub const Vec3i = Vector3Base.vec3(isize);
 pub const Vec3c = Vector3Base.vec3(u8);
 
 // Rays
-pub const Ray = @import("types/Ray.zig").ray(Vec3f, isize);
+pub const Ray = @import("types/Ray.zig").ray(Vec3f, fsize);
 
 ///////////////////////////////////////////////////
 //                    TESTING                    //

@@ -24,15 +24,34 @@ pub const Sphere = struct {
         return distance <= math.pow(fsize, self.radius, 2);
     }
 
-    pub fn intersect(self: Sphere, ray: Ray) bool {
+    // pub fn intersection(self: Sphere, ray: Ray) ?fsize {
+    //     const oc = self.center.subVec(ray.origin);
+    //
+    //     const a = ray.direction.dot(ray.direction);
+    //     const b = -2.0 * ray.direction.dot(oc);
+    //     const c = oc.dot(oc) - (self.radius * self.radius);
+    //
+    //     const discriminant = (b * b) - (4 * a * c);
+    //     if (discriminant < 0) {
+    //         return null;
+    //     } else {
+    //         return ((-b) - math.sqrt(discriminant)) / (2.0 * a);
+    //     }
+    // }
+
+    pub fn intersection(self: Sphere, ray: Ray) ?fsize {
         const oc = self.center.subVec(ray.origin);
 
-        const a = ray.direction.dot(ray.direction);
-        const b = -2.0 * ray.direction.dot(oc);
-        const c = oc.dot(oc) - (self.radius * self.radius);
+        const a = ray.direction.lengthSq();
+        const h = ray.direction.dot(oc);
+        const c = oc.lengthSq() - (self.radius * self.radius);
 
-        const discriminant = (b * b) - (4 * a * c);
-        return discriminant >= 0;
+        const discriminant = (h * h) - (a * c);
+        if (discriminant < 0) {
+            return null;
+        } else {
+            return (h - math.sqrt(discriminant)) / a;
+        }
     }
 
     pub fn format(self: Sphere, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {

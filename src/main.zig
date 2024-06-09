@@ -20,7 +20,7 @@ const Sphere = @import("shapes.zig").Sphere;
 const imageAspectRatio: fsize = 16.0 / 9.0;
 
 // Image dimensions
-const imageWidth: usize = 2560;
+const imageWidth: usize = 800;
 const imageHeight: usize = @intFromFloat(imageHeightF);
 const imageWidthF: fsize = @floatFromInt(imageWidth);
 const imageHeightF: fsize = imageWidthF / imageAspectRatio;
@@ -52,10 +52,11 @@ const pixel00Loc = viewportTopLeft.addVec((pixelDeltaU.addVec(pixelDeltaV)).mult
 //                    FUNCTIONS                    //
 /////////////////////////////////////////////////////
 
-pub fn skyColor(ray: Ray) Vec3f {
+pub fn rayColor(ray: Ray) Vec3f {
     const sphere = Sphere.init(Vec3f.init(0, 0, -1), 0.5);
-    if (sphere.intersect(ray)) {
-        return Vec3f.init(1, 0, 0);
+    if (sphere.intersection(ray)) |t| {
+        const N = (ray.at(t).subVec(Vec3f.init(0, 0, -1))).unitVec();
+        return N.add(1.0).multiply(0.5);
     }
 
     const unitDirection = ray.direction.unitVec();
@@ -97,7 +98,7 @@ pub fn main() !void {
             const rayDirection = pixelCenter.subVec(cameraLocation);
             const ray = Ray.init(cameraLocation, rayDirection);
 
-            const color = skyColor(ray);
+            const color = rayColor(ray);
             try ppm.writeVecF(X, Y, color);
             pixelProgNode.completeOne();
         }

@@ -27,7 +27,15 @@ pub fn vec3(comptime T: type) type {
         }
 
         pub fn lengthSq(self: Vec) T {
-            return self.x * self.x + self.y * self.y + self.z * self.z;
+            return (self.x * self.x) + (self.y * self.y) + (self.z * self.z);
+        }
+
+        pub inline fn add(self: Vec, scalar: T) Vec {
+            return Vec.init(self.x + scalar, self.y + scalar, self.z + scalar);
+        }
+
+        pub inline fn sub(self: Vec, scalar: T) Vec {
+            return self.add(-scalar);
         }
 
         pub inline fn multiply(self: Vec, scalar: T) Vec {
@@ -108,6 +116,21 @@ test "Vec length" {
 }
 
 test "Vec scalar" {
+    const testVecAdd = vf.init(0.0, 2.2, 1789);
+    const expectedAdd = vf.init(1.0, 3.2, 1790);
+    const actualAdd = testVecAdd.add(1.0);
+    try testing.expectEqual(expectedAdd, actualAdd);
+
+    const testVecSub = vf.init(7.8, -0.8, 0.00003);
+    const expectedSub = vf.init(6.6, -2, -1.19997);
+    const actualSub = testVecSub.sub(1.2);
+
+    try testing.expect(math.approxEqRel(VT, expectedSub.x, actualSub.x, 0.05));
+    try testing.expect(math.approxEqRel(VT, expectedSub.y, actualSub.y, 0.05));
+    try testing.expect(math.approxEqRel(VT, expectedSub.z, actualSub.z, 0.05));
+}
+
+test "Vec add subtract" {
     const testVecAdd = vf.init(0.0, 2.2, 1789);
     const expectedAdd = vf.init(5.2, 2.2, -2786);
     const actualAdd = testVecAdd.addVec(vf.init(5.2, 0.0, -4575));
