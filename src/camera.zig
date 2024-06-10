@@ -21,6 +21,7 @@ const utils = @import("utils.zig");
 const Camera = @This();
 
 samples: usize = 10,
+maxDepth: isize = 10,
 viewport: Viewport,
 renderProgress: std.Progress.Node,
 pixmap: []Vec3f,
@@ -66,7 +67,7 @@ pub fn render(self: *Camera, world: *const World) !void {
             var pixelColor = Vec3f.init(0, 0, 0);
             for (0..self.samples) |_| {
                 const ray = self.getRay(x, y);
-                const sampleColor = rayColor(ray, world);
+                const sampleColor = rayColor(ray, self.maxDepth, world);
                 pixelColor = pixelColor.addVec(sampleColor);
             }
 
@@ -144,12 +145,24 @@ fn sampleSquare(self: *const Camera) Vec3f {
 }
 
 /// Determine the color that a ray should return when cast into the world
-fn rayColor(ray: Ray, world: *const World) Vec3f {
-    const ival = Interval.init(0, math.inf(fsize));
+fn rayColor(ray: Ray, depth: isize, world: *const World) Vec3f {
+    // We start at 1000*epsilon to avoid artifacting due to floating point
+    // rounding errors
+    const ival = Interval.init(10000 * math.floatEps(fsize), math.inf(fsize));
+
+    // If we're too many rays deep, we can't collect any more light
+    if (depth <= 0)
+        return Vec3f.init(0, 0, 0);
+
+    // If we intersect with any objects, determine the color returned by the
+    // object
     if (world.intersection(ray, ival)) |hr| {
-        return (hr.normal.add(1.0)).multiply(0.5);
+        const d = Vec3f.randomHemisphere(hr.normal);
+        const o = hr.pos;
+        return rayColor(Ray.init(o, d), depth - 1, world).multiply(0.5);
     }
 
+    // If we don't hit any object, calculate the color of the sky
     const unitDirection = ray.direction.unitVec();
     const a = 0.5 * (unitDirection.y + 1.0);
 

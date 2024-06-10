@@ -42,6 +42,8 @@ pub fn main() !void {
 
     var cam = try Camera.init(alloc, imageWidth, imageAspectRatio);
     defer cam.deinit();
+    cam.samples = 10;
+    cam.maxDepth = 50;
 
     var world = World.init(alloc);
     defer world.deinit();

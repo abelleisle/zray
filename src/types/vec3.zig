@@ -1,6 +1,7 @@
 const std = @import("std");
-
 const math = std.math;
+
+const utils = @import("../utils.zig");
 
 ////////////////////////////////////////////////
 //                    TYPE                    //
@@ -16,6 +17,38 @@ pub fn vec3(comptime T: type) type {
 
         pub inline fn init(x: T, y: T, z: T) Vec {
             return .{ .x = x, .y = y, .z = z };
+        }
+
+        pub inline fn random() Vec {
+            return .{
+                .x = utils.randomFloat(),
+                .y = utils.randomFloat(),
+                .z = utils.randomFloat(),
+            };
+        }
+
+        pub inline fn randomRange(min: T, max: T) Vec {
+            return .{
+                .x = utils.randomFloatRange(min, max),
+                .y = utils.randomFloatRange(min, max),
+                .z = utils.randomFloatRange(min, max),
+            };
+        }
+
+        pub inline fn randomUnitSphere() Vec {
+            while (true) {
+                const v = Vec.randomRange(-1, 1);
+                if (v.lengthSq() < 1) return v;
+            }
+        }
+
+        pub inline fn randomUnitVector() Vec {
+            return Vec.randomUnitSphere().unitVec();
+        }
+
+        pub inline fn randomHemisphere(normal: Vec) Vec {
+            const v = Vec.randomUnitVector();
+            return if (v.dot(normal) > 0.0) v else v.negate();
         }
 
         pub inline fn negate(self: Vec) Vec {
