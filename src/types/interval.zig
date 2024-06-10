@@ -34,6 +34,12 @@ pub fn interval(T: type) type {
         pub fn surrounds(self: *const Interval, x: T) bool {
             return (self.min < x) and (x < self.max);
         }
+
+        pub fn clamp(self: *const Interval, x: T) T {
+            if (x < self.min) return self.min;
+            if (x > self.max) return self.max;
+            return x;
+        }
     };
 }
 

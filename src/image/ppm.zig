@@ -9,6 +9,7 @@ const Vec3f = @import("../types.zig").Vec3f;
 const Vec3i = @import("../types.zig").Vec3i;
 const Vec3c = @import("../types.zig").Vec3c;
 const fsize = @import("../types.zig").fsize;
+const Interval = @import("../types.zig").Interval;
 
 allocator: Allocator,
 width: usize,
@@ -131,9 +132,10 @@ fn convertFloatToInt(color: Vec3f) Vec3c {
     const g = color.y;
     const b = color.z;
 
-    const ir: usize = @intFromFloat(255.999 * r);
-    const ig: usize = @intFromFloat(255.999 * g);
-    const ib: usize = @intFromFloat(255.999 * b);
+    const intensity = Interval.init(0.000, 0.999);
+    const ir: u8 = @intFromFloat(256 * intensity.clamp(r));
+    const ig: u8 = @intFromFloat(256 * intensity.clamp(g));
+    const ib: u8 = @intFromFloat(256 * intensity.clamp(b));
 
-    return Vec3c.init(@truncate(ir), @truncate(ig), @truncate(ib));
+    return Vec3c.init(ir, ig, ib);
 }

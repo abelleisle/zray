@@ -13,26 +13,28 @@ const Ray = types.Ray;
 const Interval = types.Interval;
 
 const World = @import("world.zig").World;
+const utils = @import("utils.zig");
 
 ////////////////////////////////////////////////
 //                    TYPE                    //
 ////////////////////////////////////////////////
 const Camera = @This();
 
+samples: usize = 10,
 viewport: Viewport,
 renderProgress: std.Progress.Node,
-imageData: []Vec3f,
+pixmap: []Vec3f,
 
 allocator: Allocator,
 
 /// Create the camera struct
 pub fn init(allocator: Allocator, imageWidth: usize, imageAspectRatio: fsize) !Camera {
     const vp = Viewport.init(imageWidth, imageAspectRatio, 1.0);
-    const imageDataLen = vp.imageWidth * vp.imageHeight;
+    const pixmapLen = vp.imageWidth * vp.imageHeight;
     const cam = .{
         .viewport = vp,
         .renderProgress = std.Progress.start(.{}),
-        .imageData = try allocator.alloc(Vec3f, imageDataLen),
+        .pixmap = try allocator.alloc(Vec3f, pixmapLen),
 
         .allocator = allocator,
     };
@@ -42,33 +44,35 @@ pub fn init(allocator: Allocator, imageWidth: usize, imageAspectRatio: fsize) !C
     std.debug.print("\tVP: {d}, {d}\n", .{ cam.viewport.viewportWidth, cam.viewport.viewportHeight });
     std.debug.print("\tFocal Length: {d}\n", .{cam.viewport.focalLength});
     std.debug.print("\tCamera Center: {}\n", .{cam.viewport.cameraLocation});
-    std.debug.print("\tImage Size (bytes): {}\n", .{imageDataLen * @sizeOf(Vec3f)});
+    std.debug.print("\tImage Size (bytes): {}\n", .{pixmapLen * @sizeOf(Vec3f)});
 
     return cam;
 }
 
+/// Destroy the camera object
 pub fn deinit(self: *Camera) void {
-    self.allocator.free(self.imageData);
+    self.allocator.free(self.pixmap);
     self.renderProgress.end();
 }
 
 /// Given a world, render it.
 pub fn render(self: *Camera, world: *const World) !void {
     const pixelProgNode = self.renderProgress.start("Rendering Pixels", self.viewport.imageWidth * self.viewport.imageHeight);
-    for (0..self.viewport.imageHeight) |Y| {
-        const y: fsize = @floatFromInt(Y);
-        for (0..self.viewport.imageWidth) |X| {
-            const x: fsize = @floatFromInt(X);
 
-            const uDelta = self.viewport.pixelDeltaU.multiply(x);
-            const vDelta = self.viewport.pixelDeltaV.multiply(y);
+    const pixelSamplesScale: fsize = 1.0 / @as(fsize, @floatFromInt(self.samples));
 
-            const pixelCenter = self.viewport.pixel00Loc.addVec(uDelta.addVec(vDelta));
-            const rayDirection = pixelCenter.subVec(self.viewport.cameraLocation);
-            const ray = Ray.init(self.viewport.cameraLocation, rayDirection);
+    for (0..self.viewport.imageHeight) |y| {
+        for (0..self.viewport.imageWidth) |x| {
+            var pixelColor = Vec3f.init(0, 0, 0);
+            for (0..self.samples) |_| {
+                const ray = self.getRay(x, y);
+                const sampleColor = rayColor(ray, world);
+                pixelColor = pixelColor.addVec(sampleColor);
+            }
 
-            const color = rayColor(ray, world);
-            try self.writeTo(X, Y, color);
+            const finalColor = pixelColor.multiply(pixelSamplesScale);
+
+            try self.writeTo(x, y, finalColor);
             pixelProgNode.completeOne();
         }
     }
@@ -93,13 +97,13 @@ pub fn createPPM(self: *const Camera) !PPM {
 /// Write color to specified pixel
 fn writeTo(self: *Camera, x: usize, y: usize, color: Vec3f) !void {
     const index = try self.posIndex(x, y);
-    self.imageData[index] = color;
+    self.pixmap[index] = color;
 }
 
 /// Read color from specified pixel location
 fn readFrom(self: *const Camera, x: usize, y: usize) !Vec3f {
     const index = try self.posIndex(x, y);
-    return self.imageData[index];
+    return self.pixmap[index];
 }
 
 /// Convert position to index
@@ -109,6 +113,34 @@ fn posIndex(self: *const Camera, x: usize, y: usize) !usize {
     }
 
     return (x + (y * self.viewport.imageWidth));
+}
+
+fn getRay(self: *const Camera, xInt: usize, yInt: usize) Ray {
+    const x: fsize = @floatFromInt(xInt);
+    const y: fsize = @floatFromInt(yInt);
+
+    const offset = self.sampleSquare();
+
+    const pdu = self.viewport.pixelDeltaU;
+    const pdv = self.viewport.pixelDeltaV;
+
+    const xo = pdu.multiply(x + offset.x);
+    const yo = pdv.multiply(y + offset.y);
+
+    const pixelSample = (self.viewport.pixel00Loc.addVec(xo)).addVec(yo);
+
+    const origin = self.viewport.cameraLocation;
+    const direction = pixelSample.subVec(origin);
+    const ray = Ray.init(origin, direction);
+
+    return ray;
+}
+
+fn sampleSquare(self: *const Camera) Vec3f {
+    _ = self;
+    const vec = Vec3f.init(utils.randomFloat() - 0.5, utils.randomFloat() - 0.5, 0);
+
+    return vec;
 }
 
 /// Determine the color that a ray should return when cast into the world

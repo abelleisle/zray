@@ -61,7 +61,7 @@ pub fn main() !void {
     var ppm = try cam.createPPM();
     defer ppm.deinit();
 
-    var file = try ppm.render(null);
+    var file = try ppm.render(cam.renderProgress);
     defer file.deinit();
 
     var fsf = try fs.createFileAbsolute("/tmp/demo.ppm", .{});
