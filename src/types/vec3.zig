@@ -94,12 +94,28 @@ pub fn vec3(comptime T: type) type {
             return Vec.init(self.x - rhs.x, self.y - rhs.y, self.z - rhs.z);
         }
 
+        pub inline fn multiplyVec(self: Vec, rhs: Vec) Vec {
+            return Vec.init(self.x * rhs.x, self.y * rhs.y, self.z * rhs.z);
+        }
+
         pub inline fn dot(self: Vec, rhs: Vec) T {
             return (self.x * rhs.x) + (self.y * rhs.y) + (self.z * rhs.z);
         }
 
         pub inline fn cross(lhs: Vec, rhs: Vec) Vec {
             return Vec.init(lhs.y * rhs.z - lhs.z * rhs.y, lhs.z * rhs.x - lhs.x * rhs.z, lhs.x * rhs.y - lhs.y * rhs.x);
+        }
+
+        pub inline fn reflect(self: Vec, normal: Vec) Vec {
+            return self.subVec(normal.multiply(2*self.dot(normal)));
+        }
+
+        pub inline fn nearZero(self: Vec) bool {
+            const tolerance = math.floatEps(T);
+            const xClose = math.approxEqAbs(T, self.x, 0, tolerance);
+            const yClose = math.approxEqAbs(T, self.y, 0, tolerance);
+            const zClose = math.approxEqAbs(T, self.z, 0, tolerance);
+            return xClose and yClose and zClose;
         }
 
         pub fn format(self: Vec, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {

@@ -157,9 +157,15 @@ fn rayColor(ray: Ray, depth: isize, world: *const World) Vec3f {
     // If we intersect with any objects, determine the color returned by the
     // object
     if (world.intersection(ray, ival)) |hr| {
-        const d = Vec3f.randomHemisphere(hr.normal);
-        const o = hr.pos;
-        return rayColor(Ray.init(o, d), depth - 1, world).multiply(0.5);
+        if (hr.mat.scatter(ray, hr)) |scatter| {
+            const rc = rayColor(scatter.scattered, depth - 1, world);
+            return scatter.attenuation.multiplyVec(rc);
+        }
+        // This should be unreachable
+        return Vec3f.init(0, 0, 0);
+        // const d = hr.normal.addVec(Vec3f.randomUnitVector());
+        // const o = hr.pos;
+        // return rayColor(Ray.init(o, d), depth - 1, world).multiply(0.5);
     }
 
     // If we don't hit any object, calculate the color of the sky

@@ -128,9 +128,9 @@ fn posIndex(self: Self, x: usize, y: usize) !usize {
 
 /// Converts 0-1 floats vectors to 0-255 u8 vectors
 fn convertFloatToInt(color: Vec3f) Vec3c {
-    const r = color.x;
-    const g = color.y;
-    const b = color.z;
+    const r = convertLinearColorToGamma(color.x);
+    const g = convertLinearColorToGamma(color.y);
+    const b = convertLinearColorToGamma(color.z);
 
     const intensity = Interval.init(0.000, 0.999);
     const ir: u8 = @intFromFloat(256 * intensity.clamp(r));
@@ -138,4 +138,13 @@ fn convertFloatToInt(color: Vec3f) Vec3c {
     const ib: u8 = @intFromFloat(256 * intensity.clamp(b));
 
     return Vec3c.init(ir, ig, ib);
+}
+
+/// Performs gamma correction on the provided channel so it can be displayed
+/// properly on a computer monitor
+fn convertLinearColorToGamma(channel: fsize) fsize {
+    if (channel > 0)
+        return std.math.sqrt(channel);
+
+    return 0;
 }

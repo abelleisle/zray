@@ -10,6 +10,9 @@ const fsize = types.fsize;
 const HitRecord = types.HitRecord;
 const Interval = types.Interval;
 
+const Scatter = @import("material.zig").Scatter;
+const Material = @import("material.zig").Material;
+
 ////////////////////////////////////////////////
 //                    TYPE                    //
 ////////////////////////////////////////////////
@@ -38,16 +41,18 @@ pub const Shape = struct {
 pub const Sphere = struct {
     center: Vec,
     radius: fsize,
+    mat: Material,
 
     shape: Shape,
 
-    pub fn init(allocator: Allocator, center: Vec, radius: fsize) !*Sphere {
+    pub fn init(allocator: Allocator, center: Vec, radius: fsize, mat: Material) !*Sphere {
         const sphere = try allocator.create(Sphere);
         const shape = .{ .ptr = sphere, .allocator = allocator, .intersectionFnPtr = intersection, .insideFnPtr = inside, .deinitFnPtr = deinit };
         sphere.* = .{
             .center = center,
-            .radius = radius,
+            .radius = Interval.init(0, math.floatMax(fsize)).clamp(radius),
             .shape = shape,
+            .mat = mat,
         };
         return sphere;
     }
@@ -98,7 +103,7 @@ pub const Sphere = struct {
         const time = root;
         const pos = ray.at(time);
         const outwardNormal = (pos.subVec(self.center)).divide(self.radius);
-        return HitRecord.init(pos, time, ray, outwardNormal);
+        return HitRecord.init(pos, time, ray, outwardNormal, self.mat);
     }
 
     pub fn format(self: Sphere, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {

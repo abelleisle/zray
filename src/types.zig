@@ -1,4 +1,7 @@
 const math = @import("std").math;
+
+const Material = @import("material.zig").Material;
+
 /////////////////////////////////////////////////
 //                    TYPES                    //
 /////////////////////////////////////////////////
@@ -24,10 +27,11 @@ pub const HitRecord = struct {
     normal: Vec3f,
     time: fsize,
     frontFace: bool,
+    mat: Material,
 
-    pub fn init(pos: Vec3f, time: fsize, ray: Ray, outwordNormal: Vec3f) HitRecord {
+    pub fn init(pos: Vec3f, time: fsize, ray: Ray, outwordNormal: Vec3f, mat: Material) HitRecord {
         const ff: bool = ray.direction.dot(outwordNormal) < 0;
-        return .{ .pos = pos, .time = time, .frontFace = ff, .normal = if (ff) outwordNormal else outwordNormal.negate() };
+        return .{ .pos = pos, .time = time, .frontFace = ff, .normal = if (ff) outwordNormal else outwordNormal.negate(), .mat = mat };
     }
 };
 
