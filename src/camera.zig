@@ -29,8 +29,8 @@ pixmap: []Vec3f,
 allocator: Allocator,
 
 /// Create the camera struct
-pub fn init(allocator: Allocator, imageWidth: usize, imageAspectRatio: fsize) !Camera {
-    const vp = Viewport.init(imageWidth, imageAspectRatio, 1.0);
+pub fn init(allocator: Allocator, settings: CameraSettings) !Camera {
+    const vp = Viewport.init(settings);
     const pixmapLen = vp.imageWidth * vp.imageHeight;
     const cam = .{
         .viewport = vp,
@@ -43,8 +43,7 @@ pub fn init(allocator: Allocator, imageWidth: usize, imageAspectRatio: fsize) !C
     std.debug.print("Camera Information:\n", .{});
     std.debug.print("\tID: {d}, {d}\n", .{ cam.viewport.imageWidth, cam.viewport.imageHeight });
     std.debug.print("\tVP: {d}, {d}\n", .{ cam.viewport.viewportWidth, cam.viewport.viewportHeight });
-    std.debug.print("\tFocal Length: {d}\n", .{cam.viewport.focalLength});
-    std.debug.print("\tCamera Center: {}\n", .{cam.viewport.cameraLocation});
+    std.debug.print("\tCamera Center: {}\n", .{cam.viewport.center});
     std.debug.print("\tImage Size (bytes): {}\n", .{pixmapLen * @sizeOf(Vec3f)});
 
     return cam;
@@ -130,7 +129,11 @@ fn getRay(self: *const Camera, xInt: usize, yInt: usize) Ray {
 
     const pixelSample = (self.viewport.pixel00Loc.addVec(xo)).addVec(yo);
 
-    const origin = self.viewport.cameraLocation;
+    const origin = if (self.viewport.defocusAngle <= 0)
+        self.viewport.center
+    else
+        self.viewport.defocusDiskSample();
+
     const direction = pixelSample.subVec(origin);
     const ray = Ray.init(origin, direction);
 
@@ -163,9 +166,6 @@ fn rayColor(ray: Ray, depth: isize, world: *const World) Vec3f {
         }
         // This should be unreachable
         return Vec3f.init(0, 0, 0);
-        // const d = hr.normal.addVec(Vec3f.randomUnitVector());
-        // const o = hr.pos;
-        // return rayColor(Ray.init(o, d), depth - 1, world).multiply(0.5);
     }
 
     // If we don't hit any object, calculate the color of the sky
@@ -178,8 +178,28 @@ fn rayColor(ray: Ray, depth: isize, world: *const World) Vec3f {
     return lhs.addVec(rhs);
 }
 
+/// Camera creation settings
+pub const CameraSettings = struct {
+    imageWidth: usize,
+    imageAspectRatio: fsize,
+    lookFrom: Vec3f,
+    lookAt: Vec3f,
+    upDirection: Vec3f,
+    vFOV: fsize,
+    defocusAngle: fsize = 0,
+    focusDistance: fsize = 10,
+};
+
 /// Camera viewport information
 const Viewport = struct {
+    u: Vec3f,
+    v: Vec3f,
+    w: Vec3f,
+
+    defocusAngle: fsize,
+    defocusDiskU: Vec3f,
+    defocusDiskV: Vec3f,
+
     imageAspectRatio: fsize,
 
     imageWidth: usize,
@@ -189,11 +209,9 @@ const Viewport = struct {
     imageHeightF: fsize,
 
     // Viewport dimensions
-    focalLength: fsize,
-    focalLengthVec: Vec3f,
     viewportHeight: fsize,
     viewportWidth: fsize,
-    cameraLocation: Vec3f,
+    center: Vec3f,
 
     // Find horizontal and vertical viewport vectors
     viewportU: Vec3f,
@@ -210,21 +228,30 @@ const Viewport = struct {
     viewportTopLeft: Vec3f,
     pixel00Loc: Vec3f,
 
-    pub fn init(imageWidth: usize, imageAspectRatio: fsize, focalLength: fsize) Viewport {
-        const imageWidthF: fsize = @floatFromInt(imageWidth);
-        const imageHeightF: fsize = imageWidthF / imageAspectRatio;
+    pub fn init(settings: CameraSettings) Viewport {
+        const imageWidthF: fsize = @floatFromInt(settings.imageWidth);
+        const imageHeightF: fsize = imageWidthF / settings.imageAspectRatio;
 
         const imageHeight: usize = @intFromFloat(imageHeightF);
 
         // Viewport dimensions
-        const focalLengthVec = Vec3f.init(0, 0, focalLength);
-        const viewportHeight: fsize = 2.0;
+        // const focalLength = settings.lookFrom.subVec(settings.lookAt).length();
+        const theta = utils.degreesToRadians(settings.vFOV);
+        const h = math.tan(theta / 2);
+        const viewportHeight = 2 * h * settings.focusDistance;
+        // const viewportHeight: fsize = 2.0 * h * focalLength;
+        // const viewportHeight: fsize = 2.0;
         const viewportWidth: fsize = viewportHeight * (imageWidthF / imageHeightF);
-        const cameraLocation = Vec3f.init(0, 0, 0);
+        const center = settings.lookFrom;
+
+        // Calculate U,V,W values for the viewport
+        const w = (settings.lookFrom.subVec(settings.lookAt)).unitVec();
+        const u = (settings.upDirection.cross(w)).unitVec();
+        const v = w.cross(u);
 
         // Find horizontal and vertical viewport vectors
-        const viewportU = Vec3f.init(viewportWidth, 0, 0);
-        const viewportV = Vec3f.init(0, -viewportHeight, 0);
+        const viewportU = u.multiply(viewportWidth);
+        const viewportV = v.negate().multiply(viewportHeight);
 
         const viewportUhalf = viewportU.divide(2);
         const viewportVhalf = viewportV.divide(2);
@@ -234,25 +261,36 @@ const Viewport = struct {
         const pixelDeltaV = viewportV.divide(imageHeightF);
 
         // Find upper-left pixel
-        const viewportTopLeft = ((cameraLocation.subVec(focalLengthVec)).subVec(viewportUhalf)).subVec(viewportVhalf);
+        // const viewportTopLeft = ((center.subVec(focalLengthVec)).subVec(viewportUhalf)).subVec(viewportVhalf);
+        const viewportTopLeft = ((center.subVec(w.multiply(settings.focusDistance))).subVec(viewportUhalf)).subVec(viewportVhalf);
 
         const pixel00Loc = viewportTopLeft.addVec((pixelDeltaU.addVec(pixelDeltaV)).multiply(0.5));
 
+        const defocusRadius = settings.focusDistance * math.tan(utils.degreesToRadians(settings.defocusAngle / 2));
+        const defocusDiskU = u.multiply(defocusRadius);
+        const defocusDiskV = v.multiply(defocusRadius);
+
         // Create the actual struct
         return .{
-            .imageAspectRatio = imageAspectRatio,
+            .u = u,
+            .v = v,
+            .w = w,
 
-            .imageWidth = imageWidth,
+            .defocusAngle = settings.defocusAngle,
+            .defocusDiskU = defocusDiskU,
+            .defocusDiskV = defocusDiskV,
+
+            .imageAspectRatio = settings.imageAspectRatio,
+
+            .imageWidth = settings.imageWidth,
             .imageHeight = imageHeight,
 
             .imageWidthF = imageWidthF,
             .imageHeightF = imageHeightF,
 
-            .focalLength = focalLength,
-            .focalLengthVec = focalLengthVec,
             .viewportHeight = viewportHeight,
             .viewportWidth = viewportWidth,
-            .cameraLocation = cameraLocation,
+            .center = center,
 
             .viewportU = viewportU,
             .viewportV = viewportV,
@@ -266,6 +304,11 @@ const Viewport = struct {
             .viewportTopLeft = viewportTopLeft,
             .pixel00Loc = pixel00Loc,
         };
+    }
+
+    pub fn defocusDiskSample(self: *const Viewport) Vec3f {
+        const p = Vec3f.randomUnitDisk();
+        return (self.center.addVec(self.defocusDiskU.multiply(p.x))).addVec(self.defocusDiskV.multiply(p.y));
     }
 };
 

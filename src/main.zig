@@ -7,6 +7,8 @@ const fs = std.fs;
 
 const PPM = @import("image/ppm.zig");
 
+const utils = @import("utils.zig");
+
 const types = @import("types.zig");
 const Vec3f = types.Vec3f;
 const Ray = types.Ray;
@@ -27,15 +29,85 @@ const Camera = @import("camera.zig");
 //                    CONSTANTS                    //
 /////////////////////////////////////////////////////
 
-// Image aspect ratio
-const imageAspectRatio: fsize = 16.0 / 9.0;
-
-// Image dimensions
-const imageWidth: usize = 800;
+// Camera Settings
+const cSettings = Camera.CameraSettings{
+    .lookFrom = Vec3f.init(13, 2, 3),
+    .lookAt = Vec3f.init(0, 0, 0),
+    .imageWidth = 1200,
+    .imageAspectRatio = 16.0 / 9.0,
+    .vFOV = 20.0,
+    .upDirection = Vec3f.init(0, 1, 0),
+    .defocusAngle = 0.6,
+    .focusDistance = 10.0,
+};
 
 /////////////////////////////////////////////////////
 //                    FUNCTIONS                    //
 /////////////////////////////////////////////////////
+
+pub fn createRandomWorld(alloc: Allocator, world: *World) !void {
+    { // Ground
+        const mat = Material{ .Lambertain = material.Lambertain.init(Vec3f.init(0.5, 0.5, 0.5)) };
+        const sp = try Sphere.init(alloc, Vec3f.init(0, -1000, 0), 1000, mat);
+        try world.add(sp.shape);
+    }
+
+    var A: isize = -11;
+    while (A <= 11) : (A += 1) {
+        const a: fsize = @floatFromInt(A);
+        var B: isize = -11;
+        while (B <= 11) : (B += 1) {
+            const b: fsize = @floatFromInt(B);
+
+            // const radius = utils.randomFloatRange(0.1, 0.4);
+            const radius = 0.2;
+            const sphereCenter = Vec3f.init(
+                a + 0.9 * utils.randomFloat(),
+                radius,
+                b + 0.9 * utils.randomFloat(),
+            );
+
+            const chooseMat = utils.randomFloat();
+            if ((sphereCenter.subVec(Vec3f.init(4, radius, 0))).length() > 0.9) {
+                if (chooseMat < 0.8) {
+                    // Diffuse
+                    const albedo = Vec3f.random().multiplyVec(Vec3f.random());
+                    const mat = Material{ .Lambertain = material.Lambertain.init(albedo) };
+                    const sp = try Sphere.init(alloc, sphereCenter, radius, mat);
+                    try world.add(sp.shape);
+                } else if (chooseMat < 0.95) {
+                    // Metal
+                    const albedo = Vec3f.randomRange(0.5, 1.0);
+                    const fuzz = utils.randomFloatRange(0.0, 0.5);
+                    const mat = Material{ .Metal = material.Metal.init(albedo, fuzz) };
+                    const sp = try Sphere.init(alloc, sphereCenter, radius, mat);
+                    try world.add(sp.shape);
+                } else {
+                    // Glass
+                    const mat = Material{ .Dielectric = material.Dielectric.init(1.5) };
+                    const sp = try Sphere.init(alloc, sphereCenter, radius, mat);
+                    try world.add(sp.shape);
+                }
+            }
+        }
+    }
+
+    { // Center
+        const mat = Material{ .Dielectric = material.Dielectric.init(1.5) };
+        const sp = try Sphere.init(alloc, Vec3f.init(0, 1, 0), 1.0, mat);
+        try world.add(sp.shape);
+    }
+    { // Left
+        const mat = Material{ .Lambertain = material.Lambertain.init(Vec3f.init(0.4, 0.2, 0.1)) };
+        const sp = try Sphere.init(alloc, Vec3f.init(-4, 1, 0), 1.0, mat);
+        try world.add(sp.shape);
+    }
+    { // Right
+        const mat = Material{ .Metal = material.Metal.init(Vec3f.init(0.7, 0.6, 0.5), 0.0) };
+        const sp = try Sphere.init(alloc, Vec3f.init(4, 1, 0), 1.0, mat);
+        try world.add(sp.shape);
+    }
+}
 
 pub fn main() !void {
     var arenaAlloc = std.heap.ArenaAllocator.init(std.heap.page_allocator);
@@ -43,32 +115,15 @@ pub fn main() !void {
 
     const alloc = arenaAlloc.allocator();
 
-    var cam = try Camera.init(alloc, imageWidth, imageAspectRatio);
+    var cam = try Camera.init(alloc, cSettings);
     defer cam.deinit();
-    cam.samples = 10;
+    cam.samples = 1;
     cam.maxDepth = 50;
 
     var world = World.init(alloc);
     defer world.deinit();
 
-    // Create materials
-    const mGround = Material{ .Lambertain = material.Lambertain.init(Vec3f.init(0.8, 0.8, 0.0)) };
-    const mCenter = Material{ .Lambertain = material.Lambertain.init(Vec3f.init(0.1, 0.2, 0.6)) };
-    const mLeft = Material{ .Metal = material.Metal.init(Vec3f.init(0.8, 0.8, 0.8), 0.3) };
-    const mRight = Material{ .Metal = material.Metal.init(Vec3f.init(0.8, 0.6, 0.2), 1.0) };
-
-    // Create Shapes
-    var sp = try Sphere.init(alloc, Vec3f.init(0, -100.5, -1), 100, mGround);
-    try world.add(sp.shape);
-
-    sp = try Sphere.init(alloc, Vec3f.init(0, 0, -1.2), 0.5, mCenter);
-    try world.add(sp.shape);
-
-    sp = try Sphere.init(alloc, Vec3f.init(-1, 0, -1), 0.5, mLeft);
-    try world.add(sp.shape);
-
-    sp = try Sphere.init(alloc, Vec3f.init(1, 0, -1), 0.5, mRight);
-    try world.add(sp.shape);
+    try createRandomWorld(alloc, &world);
 
     try cam.render(&world);
 

@@ -46,6 +46,13 @@ pub fn vec3(comptime T: type) type {
             return Vec.randomUnitSphere().unitVec();
         }
 
+        pub inline fn randomUnitDisk() Vec {
+            while (true) {
+                const d = Vec.init(utils.randomFloatRange(-1, 1), utils.randomFloatRange(-1, 1), 0);
+                if (d.lengthSq() < 1) return d;
+            }
+        }
+
         pub inline fn randomHemisphere(normal: Vec) Vec {
             const v = Vec.randomUnitVector();
             return if (v.dot(normal) > 0.0) v else v.negate();
@@ -107,7 +114,14 @@ pub fn vec3(comptime T: type) type {
         }
 
         pub inline fn reflect(self: Vec, normal: Vec) Vec {
-            return self.subVec(normal.multiply(2*self.dot(normal)));
+            return self.subVec(normal.multiply(2 * self.dot(normal)));
+        }
+
+        pub inline fn refract(uv: Vec, normal: Vec, etaiOverEtat: T) Vec {
+            const cosTheta = @min(uv.negate().dot(normal), 1.0);
+            const rOutPerp = (uv.addVec(normal.multiply(cosTheta))).multiply(etaiOverEtat);
+            const rOutParallel = normal.multiply(-math.sqrt(@abs(1.0 - rOutPerp.lengthSq())));
+            return rOutPerp.addVec(rOutParallel);
         }
 
         pub inline fn nearZero(self: Vec) bool {

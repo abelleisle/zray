@@ -1,6 +1,8 @@
 const std = @import("std");
 const math = std.math;
 
+const utils = @import("utils.zig");
+
 const types = @import("types.zig");
 const Ray = types.Ray;
 const Vec = types.Vec3f;
@@ -20,11 +22,13 @@ pub const Scatter = struct {
 pub const Material = union(enum) {
     Lambertain: Lambertain,
     Metal: Metal,
+    Dielectric: Dielectric,
 
     pub fn scatter(self: Material, ray: Ray, hitRecord: HitRecord) ?Scatter {
         return switch (self) {
             .Lambertain => |l| l.scatter(ray, hitRecord),
             .Metal => |m| m.scatter(ray, hitRecord),
+            .Dielectric => |d| d.scatter(ray, hitRecord),
         };
     }
 };
@@ -75,6 +79,40 @@ pub const Metal = struct {
         } else {
             return null;
         }
+    }
+};
+
+pub const Dielectric = struct {
+    refractionIndex: fsize,
+
+    pub fn init(refractionIndex: fsize) Dielectric {
+        return .{ .refractionIndex = refractionIndex };
+    }
+
+    pub fn scatter(self: *const Dielectric, ray: Ray, hitRecord: HitRecord) ?Scatter {
+        const ri = if (hitRecord.frontFace)
+            1.0 / self.refractionIndex
+        else
+            self.refractionIndex;
+
+        const unitDir = ray.direction.unitVec();
+
+        const cosTheta = @min(unitDir.negate().dot(hitRecord.normal), 1.0);
+        const sinTheta = math.sqrt(1.0 - (cosTheta * cosTheta));
+
+        const cannotRefract = (ri * sinTheta) > 1.0;
+        const direction = if (cannotRefract or (reflectance(cosTheta, ri) > utils.randomFloat()))
+            unitDir.reflect(hitRecord.normal)
+        else
+            unitDir.refract(hitRecord.normal, ri);
+
+        return Scatter{ .attenuation = Vec.init(1, 1, 1), .scattered = Ray.init(hitRecord.pos, direction) };
+    }
+
+    fn reflectance(cosine: fsize, refractionIndex: fsize) fsize {
+        const r0 = math.pow(fsize, (1.0 - refractionIndex) / (1 + refractionIndex), 2);
+
+        return r0 + (1 - r0) * math.pow(fsize, (1 - cosine), 5);
     }
 };
 
