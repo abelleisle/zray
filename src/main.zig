@@ -54,8 +54,8 @@ pub fn main() !void {
     // Create materials
     const mGround = Material{ .Lambertain = material.Lambertain.init(Vec3f.init(0.8, 0.8, 0.0)) };
     const mCenter = Material{ .Lambertain = material.Lambertain.init(Vec3f.init(0.1, 0.2, 0.6)) };
-    const mLeft = Material{ .Metal = material.Metal.init(Vec3f.init(0.8, 0.8, 0.8)) };
-    const mRight = Material{ .Metal = material.Metal.init(Vec3f.init(0.8, 0.6, 0.2)) };
+    const mLeft = Material{ .Metal = material.Metal.init(Vec3f.init(0.8, 0.8, 0.8), 0.3) };
+    const mRight = Material{ .Metal = material.Metal.init(Vec3f.init(0.8, 0.6, 0.2), 1.0) };
 
     // Create Shapes
     var sp = try Sphere.init(alloc, Vec3f.init(0, -100.5, -1), 100, mGround);

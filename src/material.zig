@@ -54,18 +54,27 @@ pub const Lambertain = struct {
 
 pub const Metal = struct {
     albedo: Vec,
+    fuzz: fsize,
 
-    pub fn init(albedo: Vec) Metal {
-        return .{ .albedo = albedo };
+    pub fn init(albedo: Vec, fuzz: fsize) Metal {
+        const fuzzClamp = if (fuzz < 1.0) fuzz else 1.0;
+        return .{ .albedo = albedo, .fuzz = fuzzClamp };
     }
 
     pub fn scatter(self: *const Metal, ray: Ray, hitRecord: HitRecord) ?Scatter {
-        const reflected = ray.direction.reflect(hitRecord.normal);
+        var reflected = ray.direction.reflect(hitRecord.normal);
+        reflected = reflected.unitVec().addVec(Vec.randomUnitVector().multiply(self.fuzz));
 
-        return .{
+        const hr = Scatter{
             .scattered = Ray.init(hitRecord.pos, reflected),
             .attenuation = self.albedo,
         };
+
+        if (hr.scattered.direction.dot(hitRecord.normal) > 0) {
+            return hr;
+        } else {
+            return null;
+        }
     }
 };
 
