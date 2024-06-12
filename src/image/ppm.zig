@@ -6,7 +6,6 @@ const Allocator = std.mem.Allocator;
 
 const String = @import("../types.zig").String;
 const Vec3f = @import("../types.zig").Vec3f;
-const Vec3i = @import("../types.zig").Vec3i;
 const Vec3c = @import("../types.zig").Vec3c;
 const fsize = @import("../types.zig").fsize;
 const Interval = @import("../types.zig").Interval;
@@ -97,7 +96,7 @@ pub fn fillDemo(self: *Self) !void {
 pub fn writeVecF(self: *Self, x: usize, y: usize, color: Vec3f) !void {
     const c = convertFloatToInt(color);
 
-    try self.writeTo(x, y, c.x, c.y, c.z);
+    try self.writeTo(x, y, c[0], c[1], c[2]);
 }
 
 /// Write vec with 0 - 255 integer precision to coordinate
@@ -128,16 +127,16 @@ fn posIndex(self: Self, x: usize, y: usize) !usize {
 
 /// Converts 0-1 floats vectors to 0-255 u8 vectors
 fn convertFloatToInt(color: Vec3f) Vec3c {
-    const r = convertLinearColorToGamma(color.x);
-    const g = convertLinearColorToGamma(color.y);
-    const b = convertLinearColorToGamma(color.z);
+    const r = convertLinearColorToGamma(color[0]);
+    const g = convertLinearColorToGamma(color[1]);
+    const b = convertLinearColorToGamma(color[2]);
 
     const intensity = Interval.init(0.000, 0.999);
     const ir: u8 = @intFromFloat(256 * intensity.clamp(r));
     const ig: u8 = @intFromFloat(256 * intensity.clamp(g));
     const ib: u8 = @intFromFloat(256 * intensity.clamp(b));
 
-    return Vec3c.init(ir, ig, ib);
+    return Vec3c{ir, ig, ib};
 }
 
 /// Performs gamma correction on the provided channel so it can be displayed

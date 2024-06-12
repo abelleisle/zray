@@ -5,7 +5,8 @@ const utils = @import("utils.zig");
 
 const types = @import("types.zig");
 const Ray = types.Ray;
-const Vec = types.Vec3f;
+const Vec3f = types.Vec3f;
+const Vec = types.Vec;
 const fsize = types.fsize;
 const HitRecord = types.HitRecord;
 const Interval = types.Interval;
@@ -15,7 +16,7 @@ const Interval = types.Interval;
 ////////////////////////////////////////////////
 
 pub const Scatter = struct {
-    attenuation: Vec,
+    attenuation: Vec3f,
     scattered: Ray,
 };
 
@@ -34,18 +35,18 @@ pub const Material = union(enum) {
 };
 
 pub const Lambertain = struct {
-    albedo: Vec,
+    albedo: Vec3f,
 
-    pub fn init(albedo: Vec) Lambertain {
+    pub fn init(albedo: Vec3f) Lambertain {
         return .{ .albedo = albedo };
     }
 
     pub fn scatter(self: *const Lambertain, ray: Ray, hitRecord: HitRecord) ?Scatter {
         _ = ray;
-        var scatterDir = hitRecord.normal.addVec(Vec.randomUnitVector());
+        var scatterDir = hitRecord.normal + Vec.randomUnitVector(Vec3f);
 
         // Catch degenerate scattering directions
-        if (scatterDir.nearZero()) {
+        if (Vec.nearZero(scatterDir)) {
             scatterDir = hitRecord.normal;
         }
 
@@ -57,24 +58,24 @@ pub const Lambertain = struct {
 };
 
 pub const Metal = struct {
-    albedo: Vec,
+    albedo: Vec3f,
     fuzz: fsize,
 
-    pub fn init(albedo: Vec, fuzz: fsize) Metal {
+    pub fn init(albedo: Vec3f, fuzz: fsize) Metal {
         const fuzzClamp = if (fuzz < 1.0) fuzz else 1.0;
         return .{ .albedo = albedo, .fuzz = fuzzClamp };
     }
 
     pub fn scatter(self: *const Metal, ray: Ray, hitRecord: HitRecord) ?Scatter {
-        var reflected = ray.direction.reflect(hitRecord.normal);
-        reflected = reflected.unitVec().addVec(Vec.randomUnitVector().multiply(self.fuzz));
+        var reflected = Vec.reflect(ray.direction, hitRecord.normal);
+        reflected = Vec.unit(reflected) + (Vec.randomUnitVector(Vec3f) * Vec.scalar(Vec3f, self.fuzz));
 
         const hr = Scatter{
             .scattered = Ray.init(hitRecord.pos, reflected),
             .attenuation = self.albedo,
         };
 
-        if (hr.scattered.direction.dot(hitRecord.normal) > 0) {
+        if (Vec.dot(hr.scattered.direction, hitRecord.normal) > 0) {
             return hr;
         } else {
             return null;
@@ -95,18 +96,18 @@ pub const Dielectric = struct {
         else
             self.refractionIndex;
 
-        const unitDir = ray.direction.unitVec();
+        const unitDir = Vec.unit(ray.direction);
 
-        const cosTheta = @min(unitDir.negate().dot(hitRecord.normal), 1.0);
+        const cosTheta = @min(Vec.dot(-unitDir, hitRecord.normal), 1.0);
         const sinTheta = math.sqrt(1.0 - (cosTheta * cosTheta));
 
         const cannotRefract = (ri * sinTheta) > 1.0;
         const direction = if (cannotRefract or (reflectance(cosTheta, ri) > utils.randomFloat()))
-            unitDir.reflect(hitRecord.normal)
+            Vec.reflect(unitDir, hitRecord.normal)
         else
-            unitDir.refract(hitRecord.normal, ri);
+            Vec.refract(unitDir, hitRecord.normal, ri);
 
-        return Scatter{ .attenuation = Vec.init(1, 1, 1), .scattered = Ray.init(hitRecord.pos, direction) };
+        return Scatter{ .attenuation = Vec.vec3f(1, 1, 1), .scattered = Ray.init(hitRecord.pos, direction) };
     }
 
     fn reflectance(cosine: fsize, refractionIndex: fsize) fsize {

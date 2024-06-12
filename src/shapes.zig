@@ -5,7 +5,8 @@ const Allocator = std.mem.Allocator;
 
 const types = @import("types.zig");
 const Ray = types.Ray;
-const Vec = types.Vec3f;
+const Vec3f = types.Vec3f;
+const Vec = types.Vec;
 const fsize = types.fsize;
 const HitRecord = types.HitRecord;
 const Interval = types.Interval;
@@ -22,16 +23,16 @@ pub const Shape = struct {
     allocator: Allocator,
 
     intersectionFnPtr: *const fn (self: *const Shape, ray: Ray, rayT: Interval) ?HitRecord,
-    insideFnPtr: *const fn (self: *const Shape, point: Vec) bool,
+    insideFnPtr: *const fn (self: *const Shape, point: Vec3f) bool,
     deinitFnPtr: *const fn (ptr: *const Shape) void,
-    originFnPtr: *const fn (ptr: *const Shape) Vec,
+    originFnPtr: *const fn (ptr: *const Shape) Vec3f,
     radiusFnPtr: *const fn (ptr: *const Shape) fsize,
 
     pub fn intersection(self: *const Shape, ray: Ray, rayT: Interval) ?HitRecord {
         return self.intersectionFnPtr(self, ray, rayT);
     }
 
-    pub fn inside(self: *const Shape, point: Vec) bool {
+    pub fn inside(self: *const Shape, point: Vec3f) bool {
         return self.insideFnPtr(self, point);
     }
 
@@ -39,7 +40,7 @@ pub const Shape = struct {
         self.deinitFnPtr(self);
     }
 
-    pub fn origin(self: *const Shape) Vec {
+    pub fn origin(self: *const Shape) Vec3f {
         return self.originFnPtr(self);
     }
 
@@ -49,13 +50,13 @@ pub const Shape = struct {
 };
 
 pub const Sphere = struct {
-    center: Vec,
+    center: Vec3f,
     radius: fsize,
     mat: Material,
 
     shape: Shape,
 
-    pub fn init(allocator: Allocator, center: Vec, radius: fsize, mat: Material) !*Sphere {
+    pub fn init(allocator: Allocator, center: Vec3f, radius: fsize, mat: Material) !*Sphere {
         const sphere = try allocator.create(Sphere);
         const shape = .{ .ptr = sphere, .allocator = allocator, .intersectionFnPtr = intersection, .insideFnPtr = inside, .deinitFnPtr = deinit, .originFnPtr = origin, .radiusFnPtr = boundingRadius };
         sphere.* = .{
@@ -76,11 +77,11 @@ pub const Sphere = struct {
         allocator.destroy(self);
     }
 
-    pub fn inside(ptr: *const Shape, point: Vec) bool {
+    pub fn inside(ptr: *const Shape, point: Vec3f) bool {
         const self: *const Sphere = @ptrCast(@alignCast(ptr.ptr));
 
-        const positionCenter = self.center.subVec(point);
-        const distance = positionCenter.dot(positionCenter);
+        const positionCenter = self.center - point;
+        const distance = Vec.dot(positionCenter, positionCenter);
 
         return distance <= math.pow(fsize, self.radius, 2);
     }
@@ -88,11 +89,11 @@ pub const Sphere = struct {
     pub fn intersection(ptr: *const Shape, ray: Ray, rayT: Interval) ?HitRecord {
         const self: *const Sphere = @ptrCast(@alignCast(ptr.ptr));
 
-        const oc = self.center.subVec(ray.origin);
+        const oc = self.center - ray.origin;
 
-        const a = ray.direction.lengthSq();
-        const h = ray.direction.dot(oc);
-        const c = oc.lengthSq() - (self.radius * self.radius);
+        const a = Vec.lengthSq(ray.direction);
+        const h = Vec.dot(ray.direction, oc);
+        const c = Vec.lengthSq(oc) - (self.radius * self.radius);
 
         const discriminant = (h * h) - (a * c);
         if (discriminant < 0) {
@@ -112,11 +113,11 @@ pub const Sphere = struct {
 
         const time = root;
         const pos = ray.at(time);
-        const outwardNormal = (pos.subVec(self.center)).divide(self.radius);
+        const outwardNormal = (pos - self.center) / Vec.scalar(@TypeOf(pos), self.radius);
         return HitRecord.init(pos, time, ray, outwardNormal, self.mat);
     }
 
-    pub fn origin(ptr: *const Shape) Vec {
+    pub fn origin(ptr: *const Shape) Vec3f {
         const self: *const Sphere = @ptrCast(@alignCast(ptr.ptr));
         return self.center;
     }
@@ -145,7 +146,7 @@ const talloc = std.testing.allocator;
 // Sphere
 
 test "Create Sphere" {
-    const originTest = Vec.init(34, 0.003, -1);
+    const originTest = Vec.vec3f(34, 0.003, -1);
     const radius = 5.6;
     const sphereTest = try Sphere.init(talloc, originTest, radius);
     defer sphereTest.destroy(talloc);
@@ -155,7 +156,7 @@ test "Create Sphere" {
 }
 
 test "Inside Origin" {
-    const originTest = Vec.init(0, 0, 0);
+    const originTest = Vec.vec3f(0, 0, 0);
     const radius = 1;
     const sphereTest = try Sphere.init(talloc, originTest, radius);
     defer sphereTest.destroy(talloc);
@@ -163,10 +164,10 @@ test "Inside Origin" {
     const ITV = struct { expected: bool, vector: Vec };
 
     const insideTest = [_]ITV{
-        .{ .expected = false, .vector = Vec.init(0, 0, 1.00001) },
-        .{ .expected = true, .vector = Vec.init(0, 0, 1.0) },
-        .{ .expected = true, .vector = Vec.init(0.577350, -0.577350, 0.577350) },
-        .{ .expected = false, .vector = Vec.init(-0.577351, -0.577350, 0.577350) },
+        .{ .expected = false, .vector = Vec.vec3f(0, 0, 1.00001) },
+        .{ .expected = true, .vector = Vec.vec3f(0, 0, 1.0) },
+        .{ .expected = true, .vector = Vec.vec3f(0.577350, -0.577350, 0.577350) },
+        .{ .expected = false, .vector = Vec.vec3f(-0.577351, -0.577350, 0.577350) },
     };
 
     for (insideTest) |i| {
@@ -177,7 +178,7 @@ test "Inside Origin" {
 }
 
 test "Inside Moved" {
-    const originTest = Vec.init(3.5, 2.4, 5.7);
+    const originTest = Vec.vec3f(3.5, 2.4, 5.7);
     const radius = 0.59;
     const sphereTest = try Sphere.init(talloc, originTest, radius);
     defer sphereTest.destroy(talloc);
@@ -185,11 +186,11 @@ test "Inside Moved" {
     const ITV = struct { expected: bool, vector: Vec };
 
     const insideTest = [_]ITV{
-        .{ .expected = true, .vector = Vec.init(3.5, 2.4, 5.7) },
-        .{ .expected = true, .vector = Vec.init(3.5, 1.82, 5.7) },
-        .{ .expected = false, .vector = Vec.init(0.1, 2.4, 5.7) },
-        .{ .expected = true, .vector = originTest.addVec((Vec.init(0.25, 0.8, -2.2).unitVec()).multiply(radius)) },
-        .{ .expected = false, .vector = originTest.addVec((Vec.init(0.25, 0.8, -2.2).unitVec()).multiply(radius * 1.0001)) },
+        .{ .expected = true, .vector = Vec.vec3f(3.5, 2.4, 5.7) },
+        .{ .expected = true, .vector = Vec.vec3f(3.5, 1.82, 5.7) },
+        .{ .expected = false, .vector = Vec.vec3f(0.1, 2.4, 5.7) },
+        .{ .expected = true, .vector = originTest.addVec((Vec.vec3f(0.25, 0.8, -2.2).unitVec()).multiply(radius)) },
+        .{ .expected = false, .vector = originTest.addVec((Vec.vec3f(0.25, 0.8, -2.2).unitVec()).multiply(radius * 1.0001)) },
     };
 
     for (insideTest) |i| {

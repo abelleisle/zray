@@ -1,3 +1,5 @@
+const Vec = @import("vecSIMD.zig");
+
 ////////////////////////////////////////////////
 //                    TYPE                    //
 ////////////////////////////////////////////////
@@ -16,7 +18,7 @@ pub fn ray(comptime T: type, comptime TimeT: type) type {
 
         /// Obtains the destination of the ray after a specified amount of time
         pub inline fn at(self: Ray, time: TimeT) T {
-            return self.origin.addVec(self.direction.multiply(time));
+            return self.origin + (self.direction * Vec.scalar(T, time));
         }
     };
 }

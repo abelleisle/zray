@@ -34,3 +34,15 @@ pub fn randomFloat() fsize {
 pub fn randomFloatRange(min: fsize, max: fsize) fsize {
     return min + (max - min) * randomFloat();
 }
+
+pub fn random(comptime T: type) T {
+    return switch (@typeInfo(T)) {
+        .Float, .ComptimeFloat => rand.float(T),
+        .Int, .ComptimeInt => rand.int(T),
+        else => @compileError("Random not implemented for that type")
+    };
+}
+
+pub fn randomRange(comptime T: type, min: fsize, max: fsize) T {
+    return min + (max - min) * random(T);
+}
