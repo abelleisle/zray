@@ -79,6 +79,68 @@ pub fn render(self: *Camera, world: *const World) !void {
     pixelProgNode.end();
 }
 
+/// Given a world, render it. This time multi-threaded!
+fn renderThreadWorker(self: *Camera, world: *const World, numThreads: usize, index: usize, pixelProgNode: *const std.Progress.Node) !void {
+    var pixelCount : usize = 0;
+    for (0..self.viewport.imageHeight) |y| {
+        for (0..self.viewport.imageWidth) |x| {
+            if (pixelCount >= numThreads) pixelCount = 0;
+            if (pixelCount == index) {
+                try self.renderPixel(world, x, y);
+                pixelProgNode.completeOne();
+            }
+            pixelCount += 1;
+        }
+    }
+}
+
+/// Given a world, render it. This time multi-threaded!
+pub fn renderThreaded(self: *Camera, world: *const World, numThreads: usize) !void {
+    const pixelProgNode = self.renderProgress.start("Rendering Pixels", self.viewport.imageWidth * self.viewport.imageHeight);
+
+    var threadList = try std.ArrayList(std.Thread).initCapacity(self.allocator, numThreads);
+    defer threadList.deinit();
+
+    for (0..numThreads) |idx| {
+        // zig fmt: off
+        const thread = try std.Thread.spawn(
+            .{},
+            renderThreadWorker,
+            .{
+                @as(*Camera, self),
+                @as(*const World, world),
+                @as(usize, numThreads),
+                @as(usize, idx),
+                @as(*const std.Progress.Node, &pixelProgNode)
+            }
+        );
+        // zig fmt: on
+        try threadList.append(thread);
+    }
+
+    for (threadList.items) |t| {
+        t.join();
+    }
+
+    pixelProgNode.end();
+}
+
+/// Given a world, render it.
+fn renderPixel(self: *Camera, world: *const World, x: usize, y: usize) !void {
+    const pixelSamplesScale: fsize = 1.0 / @as(fsize, @floatFromInt(self.samples));
+
+    var pixelColor = Vec3f.init(0, 0, 0);
+    for (0..self.samples) |_| {
+        const ray = self.getRay(x, y);
+        const sampleColor = rayColor(ray, self.maxDepth, world);
+        pixelColor = pixelColor.addVec(sampleColor);
+    }
+
+    const finalColor = pixelColor.multiply(pixelSamplesScale);
+
+    try self.writeTo(x, y, finalColor);
+}
+
 /// Create PPM image with camera data in it.
 /// Caller owns the PPM and must de-init it
 pub fn createPPM(self: *const Camera) !PPM {

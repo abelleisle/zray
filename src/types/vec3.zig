@@ -113,6 +113,12 @@ pub fn vec3(comptime T: type) type {
             return Vec.init(lhs.y * rhs.z - lhs.z * rhs.y, lhs.z * rhs.x - lhs.x * rhs.z, lhs.x * rhs.y - lhs.y * rhs.x);
         }
 
+        pub inline fn distance(lhs: Vec, rhs: Vec) T {
+            return math.sqrt(math.pow(T, (rhs.x - lhs.x), 2) +
+                math.pow(T, (rhs.y - lhs.y), 2) +
+                math.pow(T, (rhs.z - lhs.z), 2));
+        }
+
         pub inline fn reflect(self: Vec, normal: Vec) Vec {
             return self.subVec(normal.multiply(2 * self.dot(normal)));
         }
@@ -233,4 +239,12 @@ test "Vec dot cross" {
     const expectedCross = vf.init(22.43, -12.93, -26.835);
     const actualCross = testVecCrossA.cross(testVecCrossB);
     try testing.expectEqual(expectedCross, actualCross);
+}
+
+test "Vec distance" {
+    const testVecA = vf.init(1, 1, 0);
+    const testVecB = vf.init(2, 1, 2);
+    const expectedDist = 2.24;
+    const actualDist = testVecA.distance(testVecB);
+    try testing.expectEqual(expectedDist, actualDist);
 }

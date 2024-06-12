@@ -24,6 +24,8 @@ pub const Shape = struct {
     intersectionFnPtr: *const fn (self: *const Shape, ray: Ray, rayT: Interval) ?HitRecord,
     insideFnPtr: *const fn (self: *const Shape, point: Vec) bool,
     deinitFnPtr: *const fn (ptr: *const Shape) void,
+    originFnPtr: *const fn (ptr: *const Shape) Vec,
+    radiusFnPtr: *const fn (ptr: *const Shape) fsize,
 
     pub fn intersection(self: *const Shape, ray: Ray, rayT: Interval) ?HitRecord {
         return self.intersectionFnPtr(self, ray, rayT);
@@ -36,6 +38,14 @@ pub const Shape = struct {
     pub fn deinit(self: *const Shape) void {
         self.deinitFnPtr(self);
     }
+
+    pub fn origin(self: *const Shape) Vec {
+        return self.originFnPtr(self);
+    }
+
+    pub fn radius(self: *const Shape) fsize {
+        return self.radiusFnPtr(self);
+    }
 };
 
 pub const Sphere = struct {
@@ -47,7 +57,7 @@ pub const Sphere = struct {
 
     pub fn init(allocator: Allocator, center: Vec, radius: fsize, mat: Material) !*Sphere {
         const sphere = try allocator.create(Sphere);
-        const shape = .{ .ptr = sphere, .allocator = allocator, .intersectionFnPtr = intersection, .insideFnPtr = inside, .deinitFnPtr = deinit };
+        const shape = .{ .ptr = sphere, .allocator = allocator, .intersectionFnPtr = intersection, .insideFnPtr = inside, .deinitFnPtr = deinit, .originFnPtr = origin, .radiusFnPtr = boundingRadius };
         sphere.* = .{
             .center = center,
             .radius = Interval.init(0, math.floatMax(fsize)).clamp(radius),
@@ -104,6 +114,16 @@ pub const Sphere = struct {
         const pos = ray.at(time);
         const outwardNormal = (pos.subVec(self.center)).divide(self.radius);
         return HitRecord.init(pos, time, ray, outwardNormal, self.mat);
+    }
+
+    pub fn origin(ptr: *const Shape) Vec {
+        const self: *const Sphere = @ptrCast(@alignCast(ptr.ptr));
+        return self.center;
+    }
+
+    pub fn boundingRadius(ptr: *const Shape) fsize {
+        const self: *const Sphere = @ptrCast(@alignCast(ptr.ptr));
+        return self.radius;
     }
 
     pub fn format(self: Sphere, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
