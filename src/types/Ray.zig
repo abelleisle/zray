@@ -29,8 +29,8 @@ const std = @import("std");
 const math = std.math;
 const testing = std.testing;
 
-const VT = f32;
-const vf = @import("vec3.zig").vec3(VT);
+const VT = @import("../types.zig").fsize;
+const vf = @import("../types.zig").Vec3f;
 const rf = ray(vf, VT);
 
 test "Ray init" {

@@ -33,7 +33,7 @@ const Camera = @import("camera.zig");
 const cSettings = Camera.CameraSettings{
     .lookFrom = Vec3f.init(13, 2, 3),
     .lookAt = Vec3f.init(0, 0, 0),
-    .imageWidth = 1200,
+    .imageWidth = 800,
     .imageAspectRatio = 16.0 / 9.0,
     .vFOV = 20.0,
     .upDirection = Vec3f.init(0, 1, 0),
@@ -122,16 +122,31 @@ pub fn main() !void {
 
     var cam = try Camera.init(alloc, cSettings);
     defer cam.deinit();
-    cam.samples = 10;
-    cam.maxDepth = 50;
 
     var world = World.init(alloc);
     defer world.deinit();
 
     try createRandomWorld(alloc, &world);
 
-    // try cam.render(&world);
-    try cam.renderThreaded(&world, 32);
+    if (false) {
+        cam.samples = 50;
+        cam.maxDepth = 16;
+        const trials = 5;
+        const start = std.time.nanoTimestamp();
+        for (0..trials) |_| {
+            try cam.render(&world);
+            // try cam.renderThreaded(&world, 32);
+        }
+        const end = std.time.nanoTimestamp();
+        const elapsed = end - start;
+        const elapsedFloat: f64 = @floatFromInt(elapsed);
+        const elapsedSeconds = (elapsedFloat / @as(f64, @floatFromInt(trials))) / std.time.ns_per_s;
+        std.debug.print("Elapsed time for {d} tests: {d}\n", .{ trials, elapsedSeconds });
+    } else {
+        cam.samples = 5;
+        cam.maxDepth = 4;
+        try cam.render(&world);
+    }
 
     var ppm = try cam.createPPM();
     defer ppm.deinit();
