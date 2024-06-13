@@ -9,7 +9,6 @@ const PPM = @import("image/ppm.zig");
 const types = @import("types.zig");
 const fsize = types.fsize;
 const Vec3f = types.Vec3f;
-const Vec = types.Vec;
 const Ray = types.Ray;
 const Interval = types.Interval;
 
@@ -25,7 +24,7 @@ samples: usize = 10,
 maxDepth: isize = 10,
 viewport: Viewport,
 renderProgress: std.Progress.Node,
-pixmap: []Vec3f,
+pixmap: []Vec3f.Type,
 
 allocator: Allocator,
 
@@ -36,7 +35,7 @@ pub fn init(allocator: Allocator, settings: CameraSettings) !Camera {
     const cam = .{
         .viewport = vp,
         .renderProgress = std.Progress.start(.{}),
-        .pixmap = try allocator.alloc(Vec3f, pixmapLen),
+        .pixmap = try allocator.alloc(Vec3f.Type, pixmapLen),
 
         .allocator = allocator,
     };
@@ -45,7 +44,7 @@ pub fn init(allocator: Allocator, settings: CameraSettings) !Camera {
     std.debug.print("\tID: {d}, {d}\n", .{ cam.viewport.imageWidth, cam.viewport.imageHeight });
     std.debug.print("\tVP: {d}, {d}\n", .{ cam.viewport.viewportWidth, cam.viewport.viewportHeight });
     std.debug.print("\tCamera Center: {}\n", .{cam.viewport.center});
-    std.debug.print("\tImage Size (bytes): {}\n", .{pixmapLen * @sizeOf(Vec3f)});
+    std.debug.print("\tImage Size (bytes): {}\n", .{pixmapLen * @sizeOf(Vec3f.Type)});
 
     return cam;
 }
@@ -64,14 +63,14 @@ pub fn render(self: *Camera, world: *const World) !void {
 
     for (0..self.viewport.imageHeight) |y| {
         for (0..self.viewport.imageWidth) |x| {
-            var pixelColor = Vec.vec3f(0, 0, 0);
+            var pixelColor = Vec3f.Type{ 0, 0, 0 };
             for (0..self.samples) |_| {
                 const ray = self.getRay(x, y);
                 const sampleColor = rayColor(ray, self.maxDepth, world);
                 pixelColor = pixelColor + sampleColor;
             }
 
-            const finalColor = pixelColor * Vec.scalar(@TypeOf(pixelColor), pixelSamplesScale);
+            const finalColor = pixelColor * Vec3f.S(pixelSamplesScale);
 
             try self.writeTo(x, y, finalColor);
             pixelProgNode.completeOne();
@@ -130,14 +129,14 @@ pub fn renderThreaded(self: *Camera, world: *const World, numThreads: usize) !vo
 fn renderPixel(self: *Camera, world: *const World, x: usize, y: usize) !void {
     const pixelSamplesScale: fsize = 1.0 / @as(fsize, @floatFromInt(self.samples));
 
-    var pixelColor = Vec3f.init(0, 0, 0);
+    var pixelColor = Vec3f.Type{0, 0, 0};
     for (0..self.samples) |_| {
         const ray = self.getRay(x, y);
         const sampleColor = rayColor(ray, self.maxDepth, world);
-        pixelColor = pixelColor.addVec(sampleColor);
+        pixelColor = pixelColor + sampleColor;
     }
 
-    const finalColor = pixelColor.multiply(pixelSamplesScale);
+    const finalColor = pixelColor * Vec3f.S(pixelSamplesScale);
 
     try self.writeTo(x, y, finalColor);
 }
@@ -158,13 +157,13 @@ pub fn createPPM(self: *const Camera) !PPM {
 }
 
 /// Write color to specified pixel
-fn writeTo(self: *Camera, x: usize, y: usize, color: Vec3f) !void {
+fn writeTo(self: *Camera, x: usize, y: usize, color: Vec3f.Type) !void {
     const index = try self.posIndex(x, y);
     self.pixmap[index] = color;
 }
 
 /// Read color from specified pixel location
-fn readFrom(self: *const Camera, x: usize, y: usize) !Vec3f {
+fn readFrom(self: *const Camera, x: usize, y: usize) !Vec3f.Type {
     const index = try self.posIndex(x, y);
     return self.pixmap[index];
 }
@@ -187,8 +186,8 @@ fn getRay(self: *const Camera, xInt: usize, yInt: usize) Ray {
     const pdu = self.viewport.pixelDeltaU;
     const pdv = self.viewport.pixelDeltaV;
 
-    const xo = pdu * Vec.scalar(@TypeOf(pdu), x + offset[0]);
-    const yo = pdv * Vec.scalar(@TypeOf(pdv), y + offset[1]);
+    const xo = pdu * Vec3f.S(x + offset[0]);
+    const yo = pdv * Vec3f.S(y + offset[1]);
 
     const pixelSample = (self.viewport.pixel00Loc + xo) + yo;
 
@@ -203,22 +202,22 @@ fn getRay(self: *const Camera, xInt: usize, yInt: usize) Ray {
     return ray;
 }
 
-fn sampleSquare(self: *const Camera) Vec3f {
+fn sampleSquare(self: *const Camera) Vec3f.Type {
     _ = self;
-    const vec = Vec.vec3f(utils.randomFloat() - 0.5, utils.randomFloat() - 0.5, 0);
+    const vec = Vec3f.Type{ utils.randomFloat() - 0.5, utils.randomFloat() - 0.5, 0 };
 
     return vec;
 }
 
 /// Determine the color that a ray should return when cast into the world
-fn rayColor(ray: Ray, depth: isize, world: *const World) Vec3f {
+fn rayColor(ray: Ray, depth: isize, world: *const World) Vec3f.Type {
     // We start at 1000*epsilon to avoid artifacting due to floating point
     // rounding errors
     const ival = Interval.init(10000 * math.floatEps(fsize), math.inf(fsize));
 
     // If we're too many rays deep, we can't collect any more light
     if (depth <= 0)
-        return Vec.scalar(Vec3f, 0);
+        return Vec3f.S(0);
 
     // If we intersect with any objects, determine the color returned by the
     // object
@@ -228,15 +227,15 @@ fn rayColor(ray: Ray, depth: isize, world: *const World) Vec3f {
             return scatter.attenuation * rc;
         }
         // This should be unreachable
-        return Vec.scalar(Vec3f, 0);
+        return Vec3f.S(0);
     }
 
     // If we don't hit any object, calculate the color of the sky
-    const unitDirection = Vec.unit(ray.direction);
+    const unitDirection = Vec3f.unit(ray.direction);
     const a = 0.5 * (unitDirection[1] + 1.0);
 
-    const lhs = Vec.vec3f(1.0, 1.0, 1.0) * Vec.scalar(Vec3f, 1.0 - a);
-    const rhs = Vec.vec3f(0.5, 0.7, 1.0) * Vec.scalar(Vec3f, a);
+    const lhs = Vec3f.Type{1.0, 1.0, 1.0} * Vec3f.S(1.0 - a);
+    const rhs = Vec3f.Type{0.5, 0.7, 1.0} * Vec3f.S(a);
 
     return lhs + rhs;
 }
@@ -245,9 +244,9 @@ fn rayColor(ray: Ray, depth: isize, world: *const World) Vec3f {
 pub const CameraSettings = struct {
     imageWidth: usize,
     imageAspectRatio: fsize,
-    lookFrom: Vec3f,
-    lookAt: Vec3f,
-    upDirection: Vec3f,
+    lookFrom: Vec3f.Type,
+    lookAt: Vec3f.Type,
+    upDirection: Vec3f.Type,
     vFOV: fsize,
     defocusAngle: fsize = 0,
     focusDistance: fsize = 10,
@@ -255,13 +254,13 @@ pub const CameraSettings = struct {
 
 /// Camera viewport information
 const Viewport = struct {
-    u: Vec3f,
-    v: Vec3f,
-    w: Vec3f,
+    u: Vec3f.Type,
+    v: Vec3f.Type,
+    w: Vec3f.Type,
 
     defocusAngle: fsize,
-    defocusDiskU: Vec3f,
-    defocusDiskV: Vec3f,
+    defocusDiskU: Vec3f.Type,
+    defocusDiskV: Vec3f.Type,
 
     imageAspectRatio: fsize,
 
@@ -274,22 +273,22 @@ const Viewport = struct {
     // Viewport dimensions
     viewportHeight: fsize,
     viewportWidth: fsize,
-    center: Vec3f,
+    center: Vec3f.Type,
 
     // Find horizontal and vertical viewport vectors
-    viewportU: Vec3f,
-    viewportV: Vec3f,
+    viewportU: Vec3f.Type,
+    viewportV: Vec3f.Type,
 
-    viewportUhalf: Vec3f,
-    viewportVhalf: Vec3f,
+    viewportUhalf: Vec3f.Type,
+    viewportVhalf: Vec3f.Type,
 
     // Get the pixel-to-pixel vectors
-    pixelDeltaU: Vec3f,
-    pixelDeltaV: Vec3f,
+    pixelDeltaU: Vec3f.Type,
+    pixelDeltaV: Vec3f.Type,
 
     // Find upper-left pixel
-    viewportTopLeft: Vec3f,
-    pixel00Loc: Vec3f,
+    viewportTopLeft: Vec3f.Type,
+    pixel00Loc: Vec3f.Type,
 
     pub fn init(settings: CameraSettings) Viewport {
         const imageWidthF: fsize = @floatFromInt(settings.imageWidth);
@@ -308,30 +307,30 @@ const Viewport = struct {
         const center = settings.lookFrom;
 
         // Calculate U,V,W values for the viewport
-        const w = Vec.unit(settings.lookFrom - settings.lookAt);
-        const u = Vec.unit(Vec.cross(settings.upDirection, w));
-        const v = Vec.cross(w, u);
+        const w = Vec3f.unit(settings.lookFrom - settings.lookAt);
+        const u = Vec3f.unit(Vec3f.cross(settings.upDirection, w));
+        const v = Vec3f.cross(w, u);
 
         // Find horizontal and vertical viewport vectors
-        const viewportU = u * Vec.scalar(@TypeOf(u), viewportWidth);
-        const viewportV = -v * Vec.scalar(@TypeOf(v), viewportHeight);
+        const viewportU = u * Vec3f.S(viewportWidth);
+        const viewportV = -v * Vec3f.S(viewportHeight);
 
-        const viewportUhalf = viewportU / Vec.scalar(@TypeOf(viewportU), 2);
-        const viewportVhalf = viewportV / Vec.scalar(@TypeOf(viewportV), 2);
+        const viewportUhalf = viewportU / Vec3f.S(2);
+        const viewportVhalf = viewportV / Vec3f.S(2);
 
         // Get the pixel-to-pixel vectors
-        const pixelDeltaU = viewportU / Vec.scalar(@TypeOf(viewportU), imageWidthF);
-        const pixelDeltaV = viewportV / Vec.scalar(@TypeOf(viewportV), imageHeightF);
+        const pixelDeltaU = viewportU / Vec3f.S(imageWidthF);
+        const pixelDeltaV = viewportV / Vec3f.S(imageHeightF);
 
         // Find upper-left pixel
         // const viewportTopLeft = ((center.subVec(focalLengthVec)).subVec(viewportUhalf)).subVec(viewportVhalf);
-        const viewportTopLeft = center - (w * Vec.scalar(@TypeOf(w), settings.focusDistance)) - viewportUhalf - viewportVhalf;
+        const viewportTopLeft = center - (w * Vec3f.S(settings.focusDistance)) - viewportUhalf - viewportVhalf;
 
-        const pixel00Loc = viewportTopLeft + ((pixelDeltaU + pixelDeltaV) * Vec.scalar(@TypeOf(pixelDeltaU), 0.5));
+        const pixel00Loc = viewportTopLeft + ((pixelDeltaU + pixelDeltaV) * Vec3f.S(0.5));
 
         const defocusRadius = settings.focusDistance * math.tan(utils.degreesToRadians(settings.defocusAngle / 2));
-        const defocusDiskU = u * Vec.scalar(@TypeOf(u), defocusRadius);
-        const defocusDiskV = v * Vec.scalar(@TypeOf(v), defocusRadius);
+        const defocusDiskU = u * Vec3f.S(defocusRadius);
+        const defocusDiskV = v * Vec3f.S(defocusRadius);
 
         // Create the actual struct
         return .{
@@ -369,9 +368,9 @@ const Viewport = struct {
         };
     }
 
-    pub fn defocusDiskSample(self: *const Viewport) Vec3f {
-        const p = Vec.randomUnitDisk(Vec3f);
-        return self.center + (self.defocusDiskU * Vec.scalar(Vec3f, p[0])) + (self.defocusDiskV * Vec.scalar(Vec3f, p[1]));
+    pub fn defocusDiskSample(self: *const Viewport) Vec3f.Type {
+        const p = Vec3f.randomUnitDisk();
+        return self.center + (self.defocusDiskU * Vec3f.S(p[1]));
     }
 };
 

@@ -9,201 +9,116 @@ const utils = @import("../utils.zig");
 
 const fsize = f32;
 
-///////////////
-// Init
+pub fn vecType(comptime channels: comptime_int, comptime T: type) type {
+    return struct {
+        pub const Type = @Vector(channels, T);
+        const Vec = Type;
+        const N = channels;
 
-pub fn vecType(comptime len: comptime_int, comptime T: type) type {
-    return @Vector(len, T);
-}
+        ///////////////
+        // Init
 
-pub inline fn vec3(comptime T: type, x: T, y: T, z: T) vecType(3, T) {
-    if (@TypeOf(x) != @TypeOf(y) and @TypeOf(y) != @TypeOf(z)) {
-        @compileError("x, y, and z must be the same type");
-    }
-    return @Vector(3, T){ x, y, z };
-}
-
-pub inline fn vec3f(x: fsize, y: fsize, z: fsize) vecType(3, fsize) {
-    return vec3(fsize, x, y, z);
-}
-
-pub inline fn scalar(comptime T: type, value: anytype) T {
-    _ = checkType(T);
-    return @splat(value);
-}
-
-///////////////
-// Checks
-
-inline fn checkType(comptime T: type) type {
-    if (@typeInfo(T) != .Vector) {
-        @compileError("Can only pass vectors into this function");
-    }
-    return T;
-}
-
-inline fn vSize(comptime T: type) comptime_int {
-    _ = checkType(T);
-    return @typeInfo(T).Vector.len;
-}
-
-inline fn vType(comptime T: type) type {
-    _ = checkType(T);
-    return @typeInfo(T).Vector.child;
-}
-
-///////////////
-// Random
-
-pub inline fn random(comptime T: type) T {
-    _ = checkType(T);
-    const channels = vSize(T);
-    const vtype = vType(T);
-    var tmp = scalar(T, 0);
-    for (0..channels) |c| {
-        tmp[c] = utils.random(vtype);
-    }
-    return tmp;
-}
-
-pub inline fn randomRange(comptime T: type, min: anytype, max: anytype) T {
-    _ = checkType(T);
-    const channels = vSize(T);
-    const vtype = vType(T);
-    var tmp = scalar(T, 0);
-    for (0..channels) |c| {
-        tmp[c] = utils.randomRange(vtype, min, max);
-    }
-    return tmp;
-}
-
-pub inline fn randomUnitSphere(comptime T: type) T {
-    while (true) {
-        const v = randomRange(T, -1, 1);
-        if (lengthSq(v) < 1) return v;
-    }
-}
-
-pub inline fn randomUnitVector(comptime T: type) T {
-    return unit(randomUnitSphere(T));
-}
-
-pub inline fn randomUnitDisk(comptime T: type) T {
-    _ = checkType(T);
-    const channels = vSize(T);
-    const subtype = vType(T);
-    while (true) {
-        var tmp = scalar(T, 0);
-        for (0..channels - 1) |c| {
-            tmp[c] = utils.randomRange(subtype, -1, 1);
+        pub inline fn S(value: T) Vec {
+            return @splat(value);
         }
-        // const d = Vec.init(utils.randomFloatRange(-1, 1), utils.randomFloatRange(-1, 1), 0);
-        if (lengthSq(tmp) < 1) return tmp;
-    }
-}
 
-pub inline fn randomHemisphere(normal: anytype) @TypeOf(normal) {
-    const T = checkType(@TypeOf(normal));
-    const v = randomUnitVector(T);
-    return if (dot(v, normal) > 0.0) v else -v;
-}
+        ///////////////
+        // Random
 
-///////////////
-// Functions
+        pub inline fn random() Vec {
+            var tmp = S(0);
+            inline for (0..channels) |c| {
+                tmp[c] = utils.random(T);
+            }
+            return tmp;
+        }
 
-pub inline fn length(v: anytype) vType(@TypeOf(v)) {
-    _ = checkType(@TypeOf(v));
-    return math.sqrt(lengthSq(v));
-}
+        pub inline fn randomRange(min: T, max: T) Vec {
+            var tmp = S(0);
+            inline for (0..channels) |c| {
+                tmp[c] = utils.randomRange(T, min, max);
+            }
+            return tmp;
+        }
 
-pub inline fn lengthSq(v: anytype) vType(@TypeOf(v)) {
-    return dot(v, v);
-}
+        pub inline fn randomUnitSphere() Vec {
+            while (true) {
+                const v = randomRange(-1, 1);
+                if (lengthSq(v) < 1) return v;
+            }
+        }
 
-pub inline fn dot(lhs: anytype, rhs: anytype) vType(@TypeOf(lhs)) {
-    const lt = checkType(@TypeOf(lhs));
-    const rt = checkType(@TypeOf(rhs));
-    if (lt != rt) {
-        @compileError("Only vectors of the same type can be used");
-    }
+        pub inline fn randomUnitVector() Vec {
+            return unit(randomUnitSphere());
+        }
 
-    return @reduce(.Add, lhs * rhs);
-}
+        pub inline fn randomUnitDisk() Vec {
+            while (true) {
+                var tmp = S(0);
+                inline for (0..channels - 1) |c| {
+                    tmp[c] = utils.randomRange(T, -1, 1);
+                }
+                if (lengthSq(tmp) < 1) return tmp;
+            }
+        }
 
-pub fn unit(v: anytype) @TypeOf(v) {
-    return v / scalar(@TypeOf(v), length(v));
-}
+        pub inline fn randomHemisphere(normal: Vec) Vec {
+            const v = randomUnitVector();
+            return if (dot(v, normal) > 0.0) v else -v;
+        }
 
-pub inline fn cross(lhs: anytype, rhs: anytype) @TypeOf(lhs) {
-    const lt = checkType(@TypeOf(lhs));
-    const rt = checkType(@TypeOf(rhs));
-    if (lt != rt) {
-        @compileError("Only vectors of the same type can be used");
-    }
+        ///////////////
+        // Functions
 
-    return switch (vSize(lt)) {
-        3 => lt{
-            lhs[1] * rhs[2] - lhs[2] * rhs[1],
-            lhs[2] * rhs[0] - lhs[0] * rhs[2],
-            lhs[0] * rhs[1] - lhs[1] * rhs[0],
-        },
-        else => @compileError("Cross product not implemented for that size vector"),
+        pub inline fn length(v: Vec) T {
+            return math.sqrt(lengthSq(v));
+        }
+
+        pub inline fn lengthSq(v: Vec) T {
+            return dot(v, v);
+        }
+
+        pub inline fn dot(lhs: Vec, rhs: Vec) T {
+            return @reduce(.Add, lhs * rhs);
+        }
+
+        pub inline fn unit(v: Vec) Vec {
+            return v / S(length(v));
+        }
+
+        pub inline fn cross(lhs: Vec, rhs: Vec) Vec {
+            return switch (N) {
+                3 => Vec{
+                    lhs[1] * rhs[2] - lhs[2] * rhs[1],
+                    lhs[2] * rhs[0] - lhs[0] * rhs[2],
+                    lhs[0] * rhs[1] - lhs[1] * rhs[0],
+                },
+                else => @compileError("Cross product not implemented for that size vector"),
+            };
+        }
+
+        pub inline fn distance(lhs: Vec, rhs: Vec) T {
+            return length(rhs - lhs);
+        }
+
+        pub inline fn reflect(v: Vec, normal: Vec) Vec {
+            return v - S(2 * dot(v, normal)) * normal;
+        }
+
+        pub inline fn refract(uv: Vec, normal: Vec, etaiOverEtat: T) Vec {
+            const cosTheta = @min(dot(-uv, normal), 1.0);
+            const rOutPerp = S(etaiOverEtat) * (uv + (S(cosTheta) * normal));
+            const rOutParallel = normal * S(-math.sqrt(@abs(1.0 - lengthSq(rOutPerp))));
+
+            return rOutPerp + rOutParallel;
+        }
+
+        pub inline fn nearZero(v: Vec) bool {
+            const tolerance = S(math.floatEps(T));
+
+            return @reduce(.And, @abs(v) < tolerance);
+        }
     };
-}
-
-pub inline fn distance(lhs: anytype, rhs: anytype) vType(@TypeOf(lhs)) {
-    const lt = checkType(@TypeOf(lhs));
-    const rt = checkType(@TypeOf(rhs));
-    if (lt != rt) {
-        @compileError("Only vectors of the same type can be used");
-    }
-
-    return length(rhs - lhs);
-}
-
-pub inline fn reflect(v: anytype, normal: anytype) @TypeOf(v) {
-    const vt = checkType(@TypeOf(v));
-    const nt = checkType(@TypeOf(normal));
-    if (vt != nt) {
-        @compileError("Only vectors of the same type can be used");
-    }
-
-    return v - scalar(vt, 2 * dot(v, normal)) * normal;
-}
-
-pub inline fn refract(uv: anytype, normal: anytype, etaiOverEtat: anytype) @TypeOf(uv) {
-    const uvt = checkType(@TypeOf(uv));
-    const nt = checkType(@TypeOf(normal));
-    if (uvt != nt) {
-        @compileError("Only vectors of the same type can be used");
-    }
-    const etat = @TypeOf(etaiOverEtat);
-    const uvts = vType(uvt);
-    if (etat != uvts) {
-        @compileError("eta and sub-type of uv must be the same");
-    }
-
-    const cosTheta = @min(dot(-uv, normal), 1.0);
-    const rOutPerp = scalar(uvt, etaiOverEtat) * (uv + (scalar(uvt, cosTheta) * normal));
-    const rOutParallel = normal * scalar(uvt, -math.sqrt(@abs(1.0 - lengthSq(rOutPerp))));
-
-    return rOutPerp + rOutParallel;
-}
-
-pub inline fn nearZero(v: anytype) bool {
-    const T = checkType(@TypeOf(v));
-    const vsT = vType(T);
-    // const vsS = vSize(T);
-
-    const tolerance = scalar(T, math.floatEps(vsT));
-
-    return @reduce(.And, @abs(v) < tolerance);
-
-    // for (0..vsS) |c| {
-    //     if (!math.approxEqAbs(vsT, v[c], 0, tolerance)) return false;
-    // }
-
-    // return true;
 }
 
 // pub fn format(self: Vec, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {

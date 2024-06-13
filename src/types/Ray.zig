@@ -1,4 +1,4 @@
-const Vec = @import("vecSIMD.zig");
+const Vec3f = @import("../types.zig").Vec3f;
 
 ////////////////////////////////////////////////
 //                    TYPE                    //
@@ -6,19 +6,19 @@ const Vec = @import("vecSIMD.zig");
 
 pub fn ray(comptime T: type, comptime TimeT: type) type {
     return struct {
-        origin: T,
-        direction: T,
+        origin: T.Type,
+        direction: T.Type,
 
         const Ray = @This();
 
         /// Creates a Ray object
-        pub inline fn init(origin: T, direction: T) Ray {
+        pub inline fn init(origin: T.Type, direction: T.Type) Ray {
             return .{ .origin = origin, .direction = direction };
         }
 
         /// Obtains the destination of the ray after a specified amount of time
-        pub inline fn at(self: Ray, time: TimeT) T {
-            return self.origin + (self.direction * Vec.scalar(T, time));
+        pub inline fn at(self: Ray, time: TimeT) T.Type {
+            return self.origin + (self.direction * T.S(time));
         }
     };
 }

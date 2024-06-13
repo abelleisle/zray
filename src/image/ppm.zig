@@ -85,7 +85,7 @@ pub fn fillDemo(self: *Self) !void {
         for (0..self.width) |x| {
             const X: fsize = @floatFromInt(x);
 
-            const color = Vec3f.init(X / w, Y / h, 0.0);
+            const color = Vec3f.Type{X / w, Y / h, 0.0};
 
             try self.writeVecF(x, y, color);
         }
@@ -93,14 +93,14 @@ pub fn fillDemo(self: *Self) !void {
 }
 
 /// Write vec with 0 - 1 precision to coordinate
-pub fn writeVecF(self: *Self, x: usize, y: usize, color: Vec3f) !void {
+pub fn writeVecF(self: *Self, x: usize, y: usize, color: Vec3f.Type) !void {
     const c = convertFloatToInt(color);
 
     try self.writeTo(x, y, c[0], c[1], c[2]);
 }
 
 /// Write vec with 0 - 255 integer precision to coordinate
-pub fn writeVecC(self: *Self, x: usize, y: usize, color: Vec3c) !void {
+pub fn writeVecC(self: *Self, x: usize, y: usize, color: Vec3c.Type) !void {
     const r = color.x;
     const g = color.y;
     const b = color.z;
@@ -126,7 +126,7 @@ fn posIndex(self: Self, x: usize, y: usize) !usize {
 }
 
 /// Converts 0-1 floats vectors to 0-255 u8 vectors
-fn convertFloatToInt(color: Vec3f) Vec3c {
+fn convertFloatToInt(color: Vec3f.Type) Vec3c.Type {
     const r = convertLinearColorToGamma(color[0]);
     const g = convertLinearColorToGamma(color[1]);
     const b = convertLinearColorToGamma(color[2]);
@@ -136,7 +136,7 @@ fn convertFloatToInt(color: Vec3f) Vec3c {
     const ig: u8 = @intFromFloat(256 * intensity.clamp(g));
     const ib: u8 = @intFromFloat(256 * intensity.clamp(b));
 
-    return Vec3c{ir, ig, ib};
+    return Vec3c.Type{ir, ig, ib};
 }
 
 /// Performs gamma correction on the provided channel so it can be displayed
